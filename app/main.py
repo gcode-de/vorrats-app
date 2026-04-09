@@ -189,7 +189,7 @@ async def lookup_barcode(barcode: str):
 
 @app.get("/")
 def root():
-    return FileResponse("./index.html")
+    return FileResponse("./static/index.html")
 
 # ---------------------------------------------------------------------------
 # Install requirements

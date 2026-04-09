@@ -5,8 +5,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app/ ./app/
-COPY static/ ./static/
+COPY main.py ./app/main.py
+COPY index.html ./static/index.html
 
 VOLUME ["/data"]
 
