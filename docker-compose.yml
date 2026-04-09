@@ -1,0 +1,12 @@
+services:
+  vorrat:
+    build: .
+    container_name: vorratsverwaltung
+    restart: unless-stopped
+    ports:
+      - "8080:8000"
+    volumes:
+      - vorrat-data:/data
+
+volumes:
+  vorrat-data:

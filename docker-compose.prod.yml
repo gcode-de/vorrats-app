@@ -1,0 +1,41 @@
+version: "3.8"
+
+services:
+  vorrat:
+    build: .
+    container_name: vorratsverwaltung
+    restart: unless-stopped
+    environment:
+      - DB_PATH=/data/vorrat.db
+    volumes:
+      - vorrat-data:/data
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vorrat.rule=Host(`vorrat.deine-domain.com`)"
+      - "traefik.http.routers.vorrat.entrypoints=websecure"
+      - "traefik.http.routers.vorrat.tls.certresolver=letsencrypt"
+      - "traefik.http.services.vorrat.loadbalancer.server.port=8000"
+
+  traefik:
+    image: traefik:v2.10
+    container_name: traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./traefik.yml:/etc/traefik/traefik.yml
+      - traefik-letsencrypt:/letsencrypt
+    networks:
+      - proxy
+
+volumes:
+  vorrat-data:
+  traefik-letsencrypt:
+
+networks:
+  proxy:
+    driver: bridge

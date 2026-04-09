@@ -1,0 +1,823 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+    <title>Vorratsverwaltung</title>
+    <script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      :root {
+        --bg: #ffffff;
+        --bg2: #f8f8f6;
+        --bg3: #f0efea;
+        --text: #1a1a1a;
+        --text2: #6b6b68;
+        --text3: #9b9b97;
+        --border: #e0dfd8;
+        --border2: #c8c7bf;
+        --teal: #0f6e56;
+        --teal-light: #e1f5ee;
+        --teal-text: #085041;
+        --amber: #854f0b;
+        --amber-light: #faeeda;
+        --red: #a32d2d;
+        --red-light: #fcebeb;
+        --blue: #185fa5;
+        --blue-light: #e6f1fb;
+        --green: #3b6d11;
+        --green-light: #eaf3de;
+        --radius: 10px;
+        --radius-sm: 6px;
+        --shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #1e1e1c;
+          --bg2: #2a2a27;
+          --bg3: #323230;
+          --text: #f0efea;
+          --text2: #a8a8a4;
+          --text3: #6b6b68;
+          --border: #3a3a37;
+          --border2: #4a4a47;
+          --teal-light: #04342c;
+          --teal-text: #9fe1cb;
+          --amber-light: #412402;
+          --red-light: #501313;
+          --blue-light: #042c53;
+          --green-light: #173404;
+        }
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: var(--bg3);
+        color: var(--text);
+        min-height: 100vh;
+      }
+
+      /* Header */
+      .header {
+        background: var(--bg);
+        border-bottom: 1px solid var(--border);
+        padding: 12px 16px;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .header h1 {
+        font-size: 17px;
+        font-weight: 600;
+        flex: 1;
+      }
+      .header-actions {
+        display: flex;
+        gap: 8px;
+      }
+
+      /* Stats bar */
+      .stats {
+        display: flex;
+        gap: 8px;
+        padding: 12px 16px;
+        overflow-x: auto;
+        background: var(--bg);
+      }
+      .stat-pill {
+        background: var(--bg2);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 6px 12px;
+        white-space: nowrap;
+        font-size: 13px;
+      }
+      .stat-pill span {
+        font-weight: 600;
+      }
+      .stat-pill.warn span {
+        color: var(--amber);
+      }
+      .stat-pill.danger span {
+        color: var(--red);
+      }
+
+      /* Tabs */
+      .tabs {
+        display: flex;
+        gap: 0;
+        padding: 0 16px;
+        background: var(--bg);
+        border-bottom: 1px solid var(--border);
+        overflow-x: auto;
+      }
+      .tab {
+        padding: 10px 14px;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text2);
+        border-bottom: 2px solid transparent;
+        white-space: nowrap;
+        cursor: pointer;
+        background: none;
+        border-top: none;
+        border-left: none;
+        border-right: none;
+      }
+      .tab.active {
+        color: var(--teal);
+        border-bottom-color: var(--teal);
+      }
+
+      /* Search */
+      .search-bar {
+        padding: 10px 16px;
+        background: var(--bg);
+      }
+      .search-bar input {
+        width: 100%;
+        padding: 9px 12px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        background: var(--bg2);
+        color: var(--text);
+        font-size: 14px;
+      }
+
+      /* Item list */
+      .list {
+        padding: 8px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .item-card {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 12px 14px;
+      }
+      .item-top {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+      }
+      .item-name {
+        font-size: 15px;
+        font-weight: 500;
+        flex: 1;
+        line-height: 1.3;
+      }
+      .item-meta {
+        font-size: 12px;
+        color: var(--text2);
+        margin-top: 2px;
+      }
+      .badge {
+        display: inline-block;
+        padding: 2px 7px;
+        border-radius: 10px;
+        font-size: 11px;
+        font-weight: 500;
+      }
+      .badge-food {
+        background: var(--green-light);
+        color: var(--green);
+      }
+      .badge-house {
+        background: var(--blue-light);
+        color: var(--blue);
+      }
+      .badge-hygiene {
+        background: var(--amber-light);
+        color: var(--amber);
+      }
+      .item-bottom {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 10px;
+      }
+      .qty-ctrl {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .qty-btn {
+        width: 30px;
+        height: 30px;
+        border: 1px solid var(--border2);
+        border-radius: 50%;
+        background: var(--bg2);
+        color: var(--text);
+        font-size: 18px;
+        line-height: 1;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .qty-val {
+        font-size: 16px;
+        font-weight: 600;
+        min-width: 32px;
+        text-align: center;
+      }
+      .qty-unit {
+        font-size: 12px;
+        color: var(--text2);
+      }
+      .expiry-badge {
+        font-size: 12px;
+        font-weight: 500;
+        padding: 3px 8px;
+        border-radius: 10px;
+      }
+      .exp-ok {
+        background: var(--bg2);
+        color: var(--text2);
+      }
+      .exp-warn {
+        background: var(--amber-light);
+        color: var(--amber);
+      }
+      .exp-danger {
+        background: var(--red-light);
+        color: var(--red);
+      }
+      .item-actions {
+        display: flex;
+        gap: 6px;
+      }
+      .btn-icon {
+        width: 30px;
+        height: 30px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        background: transparent;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 15px;
+        color: var(--text2);
+      }
+      .btn-icon:hover {
+        background: var(--bg2);
+      }
+
+      /* FAB */
+      .fab {
+        position: fixed;
+        bottom: 24px;
+        right: 20px;
+        width: 52px;
+        height: 52px;
+        border-radius: 50%;
+        background: var(--teal);
+        color: #fff;
+        font-size: 26px;
+        border: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        z-index: 200;
+      }
+
+      /* Modal */
+      .overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 300;
+        align-items: flex-end;
+        justify-content: center;
+      }
+      .overlay.open {
+        display: flex;
+      }
+      .modal {
+        background: var(--bg);
+        border-radius: var(--radius) var(--radius) 0 0;
+        padding: 20px;
+        width: 100%;
+        max-width: 500px;
+        max-height: 90vh;
+        overflow-y: auto;
+      }
+      .modal-title {
+        font-size: 17px;
+        font-weight: 600;
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .modal-close {
+        background: none;
+        border: none;
+        font-size: 22px;
+        color: var(--text2);
+        cursor: pointer;
+      }
+      .field {
+        margin-bottom: 14px;
+      }
+      .field label {
+        display: block;
+        font-size: 13px;
+        color: var(--text2);
+        margin-bottom: 4px;
+        font-weight: 500;
+      }
+      .field input,
+      .field select {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        background: var(--bg2);
+        color: var(--text);
+        font-size: 15px;
+      }
+      .field-row {
+        display: flex;
+        gap: 10px;
+      }
+      .field-row .field {
+        flex: 1;
+      }
+      .btn-primary {
+        width: 100%;
+        padding: 13px;
+        background: var(--teal);
+        color: #fff;
+        border: none;
+        border-radius: var(--radius-sm);
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+        margin-top: 4px;
+      }
+      .btn-secondary {
+        width: 100%;
+        padding: 11px;
+        background: var(--bg2);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        font-size: 14px;
+        cursor: pointer;
+        margin-top: 6px;
+      }
+
+      /* Barcode scanner */
+      .scan-area {
+        position: relative;
+        background: #000;
+        border-radius: var(--radius-sm);
+        overflow: hidden;
+        margin-bottom: 14px;
+        aspect-ratio: 4/3;
+        max-height: 260px;
+      }
+      .scan-area video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .scan-overlay {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+      }
+      .scan-frame {
+        width: 65%;
+        aspect-ratio: 1;
+        border: 2px solid var(--teal);
+        border-radius: 8px;
+        box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.4);
+      }
+      .scan-result {
+        background: var(--teal-light);
+        color: var(--teal-text);
+        border-radius: var(--radius-sm);
+        padding: 10px 12px;
+        font-size: 13px;
+        margin-bottom: 12px;
+        display: none;
+      }
+      .scan-result.show {
+        display: block;
+      }
+      .btn-scan {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 11px;
+        background: var(--bg2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        font-size: 14px;
+        cursor: pointer;
+        width: 100%;
+        margin-bottom: 14px;
+        color: var(--text);
+      }
+
+      /* FIFO hint */
+      .fifo-banner {
+        background: var(--teal-light);
+        color: var(--teal-text);
+        border-radius: var(--radius-sm);
+        padding: 10px 14px;
+        font-size: 13px;
+        margin: 8px 16px 0;
+        border-left: 3px solid var(--teal);
+      }
+
+      /* empty */
+      .empty {
+        text-align: center;
+        padding: 40px 16px;
+        color: var(--text2);
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>🥫 Vorrat</h1>
+      <div class="header-actions">
+        <button class="btn-icon" id="btn-sort" title="Sortierung">⇅</button>
+      </div>
+    </div>
+
+    <div class="stats" id="stats-bar"></div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="all">Alle</button>
+      <button class="tab" data-tab="food">Lebensmittel</button>
+      <button class="tab" data-tab="house">Haushalt</button>
+      <button class="tab" data-tab="hygiene">Hygiene</button>
+      <button class="tab" data-tab="expiry">⚠ Ablauf</button>
+    </div>
+
+    <div class="search-bar"><input id="search" placeholder="Suche…" oninput="render()" /></div>
+    <div id="fifo-banner"></div>
+    <div class="list" id="list"></div>
+
+    <button class="fab" id="fab">＋</button>
+
+    <!-- Add/Edit Modal -->
+    <div class="overlay" id="modal-overlay">
+      <div class="modal" id="modal">
+        <div class="modal-title">
+          <span id="modal-title-text">Produkt hinzufügen</span>
+          <button class="modal-close" onclick="closeModal()">✕</button>
+        </div>
+
+        <!-- Barcode scan button -->
+        <button class="btn-scan" id="btn-scan-toggle" onclick="toggleScanner()"><span>📷</span> Barcode scannen</button>
+        <div id="scan-area" class="scan-area" style="display: none">
+          <video id="scan-video" playsinline muted autoplay></video>
+          <div class="scan-overlay"><div class="scan-frame"></div></div>
+        </div>
+        <div class="scan-result" id="scan-result"></div>
+
+        <div class="field">
+          <label>Name</label>
+          <input id="f-name" type="text" placeholder="z.B. Tomatenmark" />
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Menge</label>
+            <input id="f-qty" type="number" value="1" min="1" />
+          </div>
+          <div class="field">
+            <label>Einheit</label>
+            <input id="f-unit" type="text" value="Stk" placeholder="Stk, Dos, Pak…" />
+          </div>
+        </div>
+        <div class="field">
+          <label>Kategorie</label>
+          <select id="f-cat">
+            <option value="food">Lebensmittel</option>
+            <option value="house">Haushalt</option>
+            <option value="hygiene">Hygiene / Pflege</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Mindesthaltbarkeitsdatum</label>
+          <input id="f-expiry" type="date" />
+        </div>
+
+        <button class="btn-primary" id="modal-submit" onclick="submitModal()">Speichern</button>
+        <button class="btn-secondary" id="modal-delete" style="display: none; color: var(--red)" onclick="deleteItem()">Löschen</button>
+      </div>
+    </div>
+
+    <script>
+      const API = "";
+      let items = [];
+      let activeTab = "all";
+      let sortMode = "expiry";
+      let editId = null;
+      let scanner = null;
+      let scannerActive = false;
+
+      const CATS = { food: "Lebensmittel", house: "Haushalt", hygiene: "Hygiene" };
+      const CAT_BADGE = { food: "badge-food", house: "badge-house", hygiene: "badge-hygiene" };
+
+      // ---------------------------------------------------------------------------
+      // API calls
+      // ---------------------------------------------------------------------------
+      async function fetchItems() {
+        items = await fetch("/api/items").then((r) => r.json());
+        render();
+      }
+      async function createItem(data) {
+        await fetch("/api/items", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+        fetchItems();
+      }
+      async function updateItem(id, data) {
+        await fetch("/api/items/" + id, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+        fetchItems();
+      }
+      async function changeQty(id, delta) {
+        await fetch("/api/items/" + id + "/qty", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ delta }),
+        });
+        fetchItems();
+      }
+      async function delItem(id) {
+        await fetch("/api/items/" + id, { method: "DELETE" });
+        fetchItems();
+      }
+
+      // ---------------------------------------------------------------------------
+      // Expiry helpers
+      // ---------------------------------------------------------------------------
+      function expiryInfo(exp) {
+        if (!exp) return null;
+        const d = Math.floor((new Date(exp) - new Date()) / 864e5);
+        if (d < 0) return { cls: "exp-danger", label: "Abgelaufen" };
+        if (d <= 7) return { cls: "exp-danger", label: d + "T" };
+        if (d <= 60) return { cls: "exp-warn", label: d <= 30 ? d + "T" : Math.round(d / 7) + "W" };
+        const mo = Math.round(d / 30);
+        return { cls: "exp-ok", label: mo > 24 ? "2+ J" : mo + "Mo" };
+      }
+      function fmtDate(d) {
+        if (!d) return "";
+        const [y, m, day] = d.split("-");
+        return `${day}.${m}.${y}`;
+      }
+
+      // ---------------------------------------------------------------------------
+      // Render
+      // ---------------------------------------------------------------------------
+      function render() {
+        const q = document.getElementById("search").value.toLowerCase();
+        let list = [...items].filter((i) => i.name.toLowerCase().includes(q));
+
+        if (activeTab === "food") list = list.filter((i) => i.cat === "food");
+        else if (activeTab === "house") list = list.filter((i) => i.cat === "house");
+        else if (activeTab === "hygiene") list = list.filter((i) => i.cat === "hygiene");
+        else if (activeTab === "expiry") {
+          list = list
+            .filter((i) => {
+              if (!i.expiry) return false;
+              return Math.floor((new Date(i.expiry) - new Date()) / 864e5) <= 90;
+            })
+            .sort((a, b) => a.expiry.localeCompare(b.expiry));
+        } else {
+          if (sortMode === "expiry")
+            list.sort((a, b) => {
+              if (a.expiry && b.expiry) return a.expiry.localeCompare(b.expiry);
+              if (a.expiry) return -1;
+              if (b.expiry) return 1;
+              return a.name.localeCompare(b.name);
+            });
+          else list.sort((a, b) => a.name.localeCompare(b.name));
+        }
+
+        // Stats
+        const soon = items.filter((i) => {
+          if (!i.expiry) return false;
+          return Math.floor((new Date(i.expiry) - new Date()) / 864e5) <= 60 && Math.floor((new Date(i.expiry) - new Date()) / 864e5) >= 0;
+        });
+        const exp = items.filter((i) => i.expiry && new Date(i.expiry) < new Date());
+        document.getElementById("stats-bar").innerHTML = `
+    <div class="stat-pill"><span>${items.length}</span> Produkte</div>
+    <div class="stat-pill"><span>${items.reduce((s, i) => s + i.qty, 0)}</span> Einheiten</div>
+    ${soon.length ? `<div class="stat-pill warn"><span>${soon.length}</span> bald ablaufend</div>` : ""}
+    ${exp.length ? `<div class="stat-pill danger"><span>${exp.length}</span> abgelaufen</div>` : ""}
+  `;
+
+        // FIFO banner
+        document.getElementById("fifo-banner").innerHTML =
+          activeTab === "expiry" ? '<div class="fifo-banner">FIFO: Zuerst das Produkt oben verbrauchen — es läuft als nächstes ab.</div>' : "";
+
+        // List
+        if (!list.length) {
+          document.getElementById("list").innerHTML = '<div class="empty">Keine Produkte gefunden</div>';
+          return;
+        }
+
+        document.getElementById("list").innerHTML = list
+          .map((item) => {
+            const ei = expiryInfo(item.expiry);
+            return `<div class="item-card">
+      <div class="item-top">
+        <div style="flex:1">
+          <div class="item-name">${item.name}</div>
+          <div class="item-meta">
+            <span class="badge ${CAT_BADGE[item.cat] || ""}">${CATS[item.cat] || item.cat}</span>
+            ${item.barcode ? `<span style="font-size:11px;color:var(--text3);margin-left:6px">🔳 ${item.barcode}</span>` : ""}
+          </div>
+        </div>
+        ${ei ? `<span class="expiry-badge ${ei.cls}">${ei.label}</span>` : ""}
+        <button class="btn-icon" onclick="openEdit(${item.id})">✎</button>
+      </div>
+      <div class="item-bottom">
+        <div class="qty-ctrl">
+          <button class="qty-btn" onclick="changeQty(${item.id},-1)">−</button>
+          <span class="qty-val">${item.qty}</span>
+          <span class="qty-unit">${item.unit}</span>
+          <button class="qty-btn" onclick="changeQty(${item.id},1)">+</button>
+        </div>
+        <div style="font-size:12px;color:var(--text2)">${item.expiry ? "MHD: " + fmtDate(item.expiry) : ""}</div>
+      </div>
+    </div>`;
+          })
+          .join("");
+      }
+
+      // ---------------------------------------------------------------------------
+      // Tabs + sort
+      // ---------------------------------------------------------------------------
+      document.querySelectorAll(".tab").forEach((t) => {
+        t.onclick = () => {
+          activeTab = t.dataset.tab;
+          document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active"));
+          t.classList.add("active");
+          render();
+        };
+      });
+      document.getElementById("btn-sort").onclick = () => {
+        sortMode = sortMode === "expiry" ? "name" : "expiry";
+        document.getElementById("btn-sort").title = sortMode === "expiry" ? "Sortiert nach Ablauf" : "Sortiert nach Name";
+        render();
+      };
+
+      // ---------------------------------------------------------------------------
+      // Modal
+      // ---------------------------------------------------------------------------
+      document.getElementById("fab").onclick = openAdd;
+
+      function openAdd() {
+        editId = null;
+        document.getElementById("modal-title-text").textContent = "Produkt hinzufügen";
+        document.getElementById("f-name").value = "";
+        document.getElementById("f-qty").value = "1";
+        document.getElementById("f-unit").value = "Stk";
+        document.getElementById("f-cat").value = "food";
+        document.getElementById("f-expiry").value = "";
+        document.getElementById("modal-delete").style.display = "none";
+        document.getElementById("modal-overlay").classList.add("open");
+      }
+
+      function openEdit(id) {
+        const item = items.find((i) => i.id === id);
+        if (!item) return;
+        editId = id;
+        document.getElementById("modal-title-text").textContent = "Produkt bearbeiten";
+        document.getElementById("f-name").value = item.name;
+        document.getElementById("f-qty").value = item.qty;
+        document.getElementById("f-unit").value = item.unit;
+        document.getElementById("f-cat").value = item.cat;
+        document.getElementById("f-expiry").value = item.expiry || "";
+        document.getElementById("modal-delete").style.display = "block";
+        document.getElementById("modal-overlay").classList.add("open");
+        stopScanner();
+      }
+
+      function closeModal() {
+        document.getElementById("modal-overlay").classList.remove("open");
+        stopScanner();
+      }
+
+      function submitModal() {
+        const data = {
+          name: document.getElementById("f-name").value.trim(),
+          qty: parseInt(document.getElementById("f-qty").value) || 1,
+          unit: document.getElementById("f-unit").value.trim() || "Stk",
+          cat: document.getElementById("f-cat").value,
+          expiry: document.getElementById("f-expiry").value || null,
+        };
+        if (!data.name) return;
+        (async () => {
+          if (editId) await updateItem(editId, data);
+          else await createItem(data);
+          closeModal();
+        })();
+      }
+
+      function deleteItem() {
+        if (!confirm("Produkt löschen?")) return;
+        (async () => {
+          await delItem(editId);
+          closeModal();
+        })();
+      }
+
+      document.getElementById("modal-overlay").onclick = (e) => {
+        if (e.target === document.getElementById("modal-overlay") && !document.activeElement.closest("#modal")) closeModal();
+      };
+
+      // ---------------------------------------------------------------------------
+      // Barcode scanner
+      // ---------------------------------------------------------------------------
+      async function toggleScanner() {
+        if (scannerActive) {
+          stopScanner();
+          return;
+        }
+        const sa = document.getElementById("scan-area");
+        sa.style.display = "block";
+        document.getElementById("btn-scan-toggle").textContent = "⏹ Scanner stoppen";
+        document.getElementById("scan-result").classList.remove("show");
+        scannerActive = true;
+
+        try {
+          const codeReader = new ZXing.BrowserMultiFormatReader();
+          scanner = codeReader;
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const videoDevices = devices.filter((d) => d.kind === "videoinput");
+          const backCam =
+            videoDevices.find((d) => d.label.toLowerCase().includes("back") || d.label.toLowerCase().includes("rear")) ||
+            videoDevices[videoDevices.length - 1];
+          const deviceId = backCam ? backCam.deviceId : undefined;
+
+          await codeReader.decodeFromVideoDevice(deviceId, "scan-video", async (result, err) => {
+            if (result) {
+              const barcode = result.getText();
+              stopScanner();
+              await handleBarcode(barcode);
+            }
+          });
+        } catch (e) {
+          alert("Kamera konnte nicht gestartet werden: " + e.message);
+          stopScanner();
+        }
+      }
+
+      function stopScanner() {
+        if (scanner) {
+          try {
+            scanner.reset();
+          } catch (e) {}
+        }
+        scanner = null;
+        scannerActive = false;
+        document.getElementById("scan-area").style.display = "none";
+        document.getElementById("btn-scan-toggle").innerHTML = "<span>📷</span> Barcode scannen";
+      }
+
+      async function handleBarcode(barcode) {
+        const res = document.getElementById("scan-result");
+        res.textContent = "Suche Produkt…";
+        res.classList.add("show");
+
+        const data = await fetch("/api/barcode/" + barcode).then((r) => r.json());
+        if (data.found && data.name) {
+          document.getElementById("f-name").value = data.name;
+          res.textContent = "✓ Gefunden: " + data.name + (data.brands ? " (" + data.brands + ")" : "");
+        } else {
+          res.textContent = "Barcode: " + barcode + " — Name bitte manuell eintragen";
+          document.getElementById("f-name").focus();
+        }
+      }
+
+      // ---------------------------------------------------------------------------
+      // Init
+      // ---------------------------------------------------------------------------
+      fetchItems();
+    </script>
+  </body>
+</html>
