@@ -671,7 +671,9 @@
           return Math.floor((new Date(i.expiry) - new Date()) / 864e5) <= 60 && Math.floor((new Date(i.expiry) - new Date()) / 864e5) >= 0;
         });
         const exp = items.filter((i) => i.expiry && new Date(i.expiry) < new Date());
-        const totalValue = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(items.reduce((s, i) => s + (i.price ? i.price * i.qty : 0), 0));
+        const totalValue = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(
+          items.reduce((s, i) => s + (i.price ? i.price * i.qty : 0), 0),
+        );
         document.getElementById("stats-bar").innerHTML = `
     <div class="stat-pill"><span>${items.length}</span> Produkte</div>
     <div class="stat-pill"><span>${items.reduce((s, i) => s + i.qty, 0)}</span> Einheiten</div>
@@ -693,7 +695,7 @@
         document.getElementById("list").innerHTML = list
           .map((item) => {
             const ei = expiryInfo(item.expiry);
-            const formattedPrice = item.price ? new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(item.price) : null;
+            const formattedPrice = item.price ? new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(item.price) : null;
             return `<div class="item-card">
       <div class="item-top">
         <div style="flex:1">
@@ -770,7 +772,7 @@
         document.getElementById("f-unit").value = item.unit;
         document.getElementById("f-cat").value = item.cat;
         document.getElementById("f-expiry").value = item.expiry || "";
-        document.getElementById("f-price").value = item.price ? item.price.toString().replace('.', ',') : "";
+        document.getElementById("f-price").value = item.price ? item.price.toString().replace(".", ",") : "";
         document.getElementById("f-store").value = item.store || "";
         document.getElementById("f-store-new").style.display = "none";
         fetchStores();
@@ -795,7 +797,7 @@
           unit: document.getElementById("f-unit").value.trim() || "Stk",
           cat: document.getElementById("f-cat").value,
           expiry: document.getElementById("f-expiry").value || null,
-          price: parseFloat(document.getElementById("f-price").value.replace(',', '.')) || null,
+          price: parseFloat(document.getElementById("f-price").value.replace(",", ".")) || null,
           store: storeValue || null,
         };
         if (!data.name) return;
