@@ -3,6 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+    <meta name="theme-color" content="#0f6e56" />
+    <link rel="manifest" href="/static/manifest.json" />
     <title>Vorratsverwaltung</title>
     <script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
     <style>
@@ -357,17 +359,36 @@
       .field-row .field {
         flex: 1;
       }
-      .btn-primary {
+      .btn-primary:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      /* Loading spinner */
+      .spinner-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
         width: 100%;
-        padding: 13px;
-        background: var(--teal);
-        color: #fff;
-        border: none;
-        border-radius: var(--radius-sm);
-        font-size: 15px;
-        font-weight: 600;
-        cursor: pointer;
-        margin-top: 4px;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        display: none;
+      }
+      .spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid var(--bg2);
+        border-top: 4px solid var(--teal);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
       }
       .btn-secondary {
         width: 100%;
@@ -544,6 +565,11 @@
       </div>
     </div>
 
+    <!-- Loading spinner -->
+    <div class="spinner-overlay" id="spinner-overlay">
+      <div class="spinner"></div>
+    </div>
+
     <script>
       const API = "";
       let items = [];
@@ -557,11 +583,26 @@
       const CAT_BADGE = { food: "badge-food", house: "badge-house", hygiene: "badge-hygiene" };
 
       // ---------------------------------------------------------------------------
+      // Spinner
+      // ---------------------------------------------------------------------------
+      function showSpinner() {
+        document.getElementById("spinner-overlay").style.display = "flex";
+      }
+      function hideSpinner() {
+        document.getElementById("spinner-overlay").style.display = "none";
+      }
+
+      // ---------------------------------------------------------------------------
       // API calls
       // ---------------------------------------------------------------------------
       async function fetchItems() {
-        items = await fetch("/api/items").then((r) => r.json());
-        render();
+        showSpinner();
+        try {
+          items = await fetch("/api/items").then((r) => r.json());
+          render();
+        } finally {
+          hideSpinner();
+        }
       }
       async function fetchStores() {
         const stores = await fetch("/api/stores").then((r) => r.json());
@@ -599,24 +640,45 @@
         };
       }
       async function createItem(data) {
-        await fetch("/api/items", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-        fetchItems();
+        showSpinner();
+        try {
+          await fetch("/api/items", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+          fetchItems();
+        } finally {
+          hideSpinner();
+        }
       }
       async function updateItem(id, data) {
-        await fetch("/api/items/" + id, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-        fetchItems();
+        showSpinner();
+        try {
+          await fetch("/api/items/" + id, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+          fetchItems();
+        } finally {
+          hideSpinner();
+        }
       }
       async function changeQty(id, delta) {
-        await fetch("/api/items/" + id + "/qty", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ delta }),
-        });
-        fetchItems();
+        showSpinner();
+        try {
+          await fetch("/api/items/" + id + "/qty", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ delta }),
+          });
+          fetchItems();
+        } finally {
+          hideSpinner();
+        }
       }
       async function delItem(id) {
-        await fetch("/api/items/" + id, { method: "DELETE" });
-        fetchItems();
+        showSpinner();
+        try {
+          await fetch("/api/items/" + id, { method: "DELETE" });
+          fetchItems();
+        } finally {
+          hideSpinner();
+        }
+      }
       }
 
       // ---------------------------------------------------------------------------
@@ -890,6 +952,15 @@
       // ---------------------------------------------------------------------------
       // Init
       // ---------------------------------------------------------------------------
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/static/sw.js')
+          .then((registration) => {
+            console.log('Service Worker registered:', registration);
+          })
+          .catch((error) => {
+            console.log('Service Worker registration failed:', error);
+          });
+      }
       fetchItems();
     </script>
   </body>

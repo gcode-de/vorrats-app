@@ -1,0 +1,21 @@
+{
+  "name": "Vorratsverwaltung",
+  "short_name": "Vorrat",
+  "description": "Verwalte deinen Vorrat einfach und übersichtlich",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0f6e56",
+  "icons": [
+    {
+      "src": "/static/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
