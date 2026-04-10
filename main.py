@@ -47,6 +47,15 @@ def init_db():
             FOREIGN KEY(item_id) REFERENCES items(id)
         )
     """)
+    # Add missing columns if they don't exist
+    try:
+        con.execute("ALTER TABLE items ADD COLUMN price REAL")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    try:
+        con.execute("ALTER TABLE items ADD COLUMN store TEXT")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
     con.commit()
     con.close()
 
