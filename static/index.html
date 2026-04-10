@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#0f6e56" />
     <link rel="manifest" href="/static/manifest.json" />
     <title>Vorratsverwaltung</title>
-    <script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
     <style>
       * {
         box-sizing: border-box;
@@ -187,18 +187,8 @@
         border-radius: 10px;
         font-size: 11px;
         font-weight: 500;
-      }
-      .badge-food {
-        background: var(--green-light);
-        color: var(--green);
-      }
-      .badge-house {
-        background: var(--blue-light);
-        color: var(--blue);
-      }
-      .badge-hygiene {
-        background: var(--amber-light);
-        color: var(--amber);
+        background: var(--bg2);
+        color: var(--text);
       }
       .item-bottom {
         display: flex;
@@ -387,8 +377,12 @@
         animation: spin 1s linear infinite;
       }
       @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
       }
       .btn-secondary {
         width: 100%;
@@ -540,7 +534,9 @@
             <option value="food">Lebensmittel</option>
             <option value="house">Haushalt</option>
             <option value="hygiene">Hygiene / Pflege</option>
+            <option value="neu">Neu hinzufügen...</option>
           </select>
+          <input id="f-cat-new" type="text" placeholder="Neue Kategorie" style="margin-top: 4px; display: none" />
         </div>
         <div class="field">
           <label>Mindesthaltbarkeitsdatum</label>
@@ -571,397 +567,413 @@
     </div>
 
     <script>
-      const API = "";
-      let items = [];
-      let activeTab = "all";
-      let sortMode = "expiry";
-      let editId = null;
-      let scanner = null;
-      let scannerActive = false;
+          const API = "";
+          let items = [];
+          let activeTab = "all";
+          let sortMode = "expiry";
+          let editId = null;
+          let scanner = null;
+          let scannerActive = false;
 
-      const CATS = { food: "Lebensmittel", house: "Haushalt", hygiene: "Hygiene" };
-      const CAT_BADGE = { food: "badge-food", house: "badge-house", hygiene: "badge-hygiene" };
+          const CATS = { food: "Lebensmittel", house: "Haushalt", hygiene: "Hygiene" };
+          const CAT_ICON = { food: "fas fa-utensils", house: "fas fa-home", hygiene: "fas fa-pump-soap" };
 
-      // ---------------------------------------------------------------------------
-      // Spinner
-      // ---------------------------------------------------------------------------
-      function showSpinner() {
-        document.getElementById("spinner-overlay").style.display = "flex";
-      }
-      function hideSpinner() {
-        document.getElementById("spinner-overlay").style.display = "none";
-      }
-
-      // ---------------------------------------------------------------------------
-      // API calls
-      // ---------------------------------------------------------------------------
-      async function fetchItems() {
-        showSpinner();
-        try {
-          items = await fetch("/api/items").then((r) => r.json());
-          render();
-        } finally {
-          hideSpinner();
-        }
-      }
-      async function fetchStores() {
-        const stores = await fetch("/api/stores").then((r) => r.json());
-        const select = document.getElementById("f-store");
-        select.innerHTML = '<option value="">-- Auswählen oder neu --</option>';
-        // Add default stores
-        const defaultStores = ["Kaufland", "DM"];
-        defaultStores.forEach((store) => {
-          if (!stores.includes(store)) {
-            const option = document.createElement("option");
-            option.value = store;
-            option.textContent = store;
-            select.appendChild(option);
+          // ---------------------------------------------------------------------------
+          // Spinner
+          // ---------------------------------------------------------------------------
+          function showSpinner() {
+            document.getElementById("spinner-overlay").style.display = "flex";
           }
-        });
-        stores.forEach((store) => {
-          const option = document.createElement("option");
-          option.value = store;
-          option.textContent = store;
-          select.appendChild(option);
-        });
-        const newOption = document.createElement("option");
-        newOption.value = "neu";
-        newOption.textContent = "Neu hinzufügen...";
-        select.appendChild(newOption);
-        select.onchange = () => {
-          const newInput = document.getElementById("f-store-new");
-          if (select.value === "neu") {
-            newInput.style.display = "block";
-            newInput.focus();
-          } else {
-            newInput.style.display = "none";
-            newInput.value = "";
+          function hideSpinner() {
+            document.getElementById("spinner-overlay").style.display = "none";
           }
-        };
-      }
-      async function createItem(data) {
-        showSpinner();
-        try {
-          await fetch("/api/items", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-          fetchItems();
-        } finally {
-          hideSpinner();
-        }
-      }
-      async function updateItem(id, data) {
-        showSpinner();
-        try {
-          await fetch("/api/items/" + id, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-          fetchItems();
-        } finally {
-          hideSpinner();
-        }
-      }
-      async function changeQty(id, delta) {
-        showSpinner();
-        try {
-          await fetch("/api/items/" + id + "/qty", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ delta }),
-          });
-          fetchItems();
-        } finally {
-          hideSpinner();
-        }
-      }
-      async function delItem(id) {
-        showSpinner();
-        try {
-          await fetch("/api/items/" + id, { method: "DELETE" });
-          fetchItems();
-        } finally {
-          hideSpinner();
-        }
-      }
-      }
 
-      // ---------------------------------------------------------------------------
-      // Expiry helpers
-      // ---------------------------------------------------------------------------
-      function expiryInfo(exp) {
-        if (!exp) return null;
-        const d = Math.floor((new Date(exp) - new Date()) / 864e5);
-        if (d < 0) return { cls: "exp-danger", label: "Abgelaufen" };
-        if (d <= 7) return { cls: "exp-danger", label: d + "T" };
-        if (d <= 60) return { cls: "exp-warn", label: d <= 30 ? d + "T" : Math.round(d / 7) + "W" };
-        const mo = Math.round(d / 30);
-        return { cls: "exp-ok", label: mo > 24 ? "2+ J" : mo + "Mo" };
-      }
-      function fmtDate(d) {
-        if (!d) return "";
-        const [y, m, day] = d.split("-");
-        return `${day}.${m}.${y}`;
-      }
-
-      // ---------------------------------------------------------------------------
-      // Render
-      // ---------------------------------------------------------------------------
-      function render() {
-        const q = document.getElementById("search").value.toLowerCase();
-        let list = [...items].filter((i) => i.name.toLowerCase().includes(q));
-
-        if (activeTab === "food") list = list.filter((i) => i.cat === "food");
-        else if (activeTab === "house") list = list.filter((i) => i.cat === "house");
-        else if (activeTab === "hygiene") list = list.filter((i) => i.cat === "hygiene");
-        else if (activeTab === "expiry") {
-          list = list
-            .filter((i) => {
-              if (!i.expiry) return false;
-              return Math.floor((new Date(i.expiry) - new Date()) / 864e5) <= 90;
-            })
-            .sort((a, b) => a.expiry.localeCompare(b.expiry));
-        } else {
-          if (sortMode === "expiry")
-            list.sort((a, b) => {
-              if (a.expiry && b.expiry) return a.expiry.localeCompare(b.expiry);
-              if (a.expiry) return -1;
-              if (b.expiry) return 1;
-              return a.name.localeCompare(b.name);
-            });
-          else list.sort((a, b) => a.name.localeCompare(b.name));
-        }
-
-        // Stats
-        const soon = items.filter((i) => {
-          if (!i.expiry) return false;
-          return Math.floor((new Date(i.expiry) - new Date()) / 864e5) <= 60 && Math.floor((new Date(i.expiry) - new Date()) / 864e5) >= 0;
-        });
-        const exp = items.filter((i) => i.expiry && new Date(i.expiry) < new Date());
-        const totalValue = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(
-          items.reduce((s, i) => s + (i.price ? i.price * i.qty : 0), 0),
-        );
-        document.getElementById("stats-bar").innerHTML = `
-    <div class="stat-pill"><span>${items.length}</span> Produkte</div>
-    <div class="stat-pill"><span>${items.reduce((s, i) => s + i.qty, 0)}</span> Einheiten</div>
-    <div class="stat-pill"><span>${totalValue}</span> Gesamtwert</div>
-    ${soon.length ? `<div class="stat-pill warn"><span>${soon.length}</span> bald ablaufend</div>` : ""}
-    ${exp.length ? `<div class="stat-pill danger"><span>${exp.length}</span> abgelaufen</div>` : ""}
-  `;
-
-        // FIFO banner
-        document.getElementById("fifo-banner").innerHTML =
-          activeTab === "expiry" ? '<div class="fifo-banner">FIFO: Zuerst das Produkt oben verbrauchen — es läuft als nächstes ab.</div>' : "";
-
-        // List
-        if (!list.length) {
-          document.getElementById("list").innerHTML = '<div class="empty">Keine Produkte gefunden</div>';
-          return;
-        }
-
-        document.getElementById("list").innerHTML = list
-          .map((item) => {
-            const ei = expiryInfo(item.expiry);
-            const formattedPrice = item.price ? new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(item.price) : null;
-            return `<div class="item-card">
-      <div class="item-top">
-        <div style="flex:1">
-          <div class="item-name">${item.name}</div>
-          <div class="item-meta">
-            <span class="badge ${CAT_BADGE[item.cat] || ""}">${CATS[item.cat] || item.cat}</span>
-            ${item.barcode ? `<span style="font-size:11px;color:var(--text3);margin-left:6px">🔳 ${item.barcode}</span>` : ""}
-            ${formattedPrice ? `<span style="font-size:11px;color:var(--text3);margin-left:6px">💰 ${formattedPrice}</span>` : ""}
-            ${item.store ? `<span style="font-size:11px;color:var(--text3);margin-left:6px">🏪 ${item.store}</span>` : ""}
-          </div>
-        </div>
-        ${ei ? `<span class="expiry-badge ${ei.cls}">${ei.label}</span>` : ""}
-        <button class="btn-icon" onclick="openEdit(${item.id})">✎</button>
-      </div>
-      <div class="item-bottom">
-        <div class="qty-ctrl">
-          <button class="qty-btn" onclick="changeQty(${item.id},-1)">−</button>
-          <span class="qty-val">${item.qty}</span>
-          <span class="qty-unit">${item.unit}</span>
-          <button class="qty-btn" onclick="changeQty(${item.id},1)">+</button>
-        </div>
-        <div style="font-size:12px;color:var(--text2)">${item.expiry ? "MHD: " + fmtDate(item.expiry) : ""}</div>
-      </div>
-    </div>`;
-          })
-          .join("");
-      }
-
-      // ---------------------------------------------------------------------------
-      // Tabs + sort
-      // ---------------------------------------------------------------------------
-      document.querySelectorAll(".tab").forEach((t) => {
-        t.onclick = () => {
-          activeTab = t.dataset.tab;
-          document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active"));
-          t.classList.add("active");
-          render();
-        };
-      });
-      document.getElementById("btn-sort").onclick = () => {
-        sortMode = sortMode === "expiry" ? "name" : "expiry";
-        document.getElementById("btn-sort").title = sortMode === "expiry" ? "Sortiert nach Ablauf" : "Sortiert nach Name";
-        render();
-      };
-
-      // ---------------------------------------------------------------------------
-      // Modal
-      // ---------------------------------------------------------------------------
-      document.getElementById("fab").onclick = openAdd;
-
-      function openAdd() {
-        editId = null;
-        document.getElementById("modal-title-text").textContent = "Produkt hinzufügen";
-        document.getElementById("f-name").value = "";
-        document.getElementById("f-qty").value = "1";
-        document.getElementById("f-unit").value = "Stk";
-        document.getElementById("f-cat").value = "food";
-        document.getElementById("f-expiry").value = "";
-        document.getElementById("f-price").value = "";
-        document.getElementById("f-store").value = "";
-        document.getElementById("f-store-new").style.display = "none";
-        document.getElementById("modal-delete").style.display = "none";
-        fetchStores();
-        document.getElementById("modal-overlay").classList.add("open");
-      }
-
-      function openEdit(id) {
-        const item = items.find((i) => i.id === id);
-        if (!item) return;
-        editId = id;
-        document.getElementById("modal-title-text").textContent = "Produkt bearbeiten";
-        document.getElementById("f-name").value = item.name;
-        document.getElementById("f-qty").value = item.qty;
-        document.getElementById("f-unit").value = item.unit;
-        document.getElementById("f-cat").value = item.cat;
-        document.getElementById("f-expiry").value = item.expiry || "";
-        document.getElementById("f-price").value = item.price ? item.price.toString().replace(".", ",") : "";
-        document.getElementById("f-store").value = item.store || "";
-        document.getElementById("f-store-new").style.display = "none";
-        fetchStores();
-        document.getElementById("modal-delete").style.display = "block";
-        document.getElementById("modal-overlay").classList.add("open");
-        stopScanner();
-      }
-
-      function closeModal() {
-        document.getElementById("modal-overlay").classList.remove("open");
-        stopScanner();
-      }
-
-      function submitModal() {
-        let storeValue = document.getElementById("f-store").value;
-        if (storeValue === "neu") {
-          storeValue = document.getElementById("f-store-new").value.trim();
-        }
-        const data = {
-          name: document.getElementById("f-name").value.trim(),
-          qty: parseInt(document.getElementById("f-qty").value) || 1,
-          unit: document.getElementById("f-unit").value.trim() || "Stk",
-          cat: document.getElementById("f-cat").value,
-          expiry: document.getElementById("f-expiry").value || null,
-          price: parseFloat(document.getElementById("f-price").value.replace(",", ".")) || null,
-          store: storeValue || null,
-        };
-        if (!data.name) return;
-        (async () => {
-          if (editId) await updateItem(editId, data);
-          else await createItem(data);
-          closeModal();
-        })();
-      }
-
-      function deleteItem() {
-        if (!confirm("Produkt löschen?")) return;
-        (async () => {
-          await delItem(editId);
-          closeModal();
-        })();
-      }
-
-      document.getElementById("modal-overlay").onclick = (e) => {
-        if (e.target === document.getElementById("modal-overlay") && !document.activeElement.closest("#modal")) closeModal();
-      };
-
-      // ---------------------------------------------------------------------------
-      // Barcode scanner
-      // ---------------------------------------------------------------------------
-      async function toggleScanner() {
-        if (scannerActive) {
-          stopScanner();
-          return;
-        }
-        const sa = document.getElementById("scan-area");
-        sa.style.display = "block";
-        document.getElementById("btn-scan-toggle").textContent = "⏹ Scanner stoppen";
-        document.getElementById("scan-result").classList.remove("show");
-        scannerActive = true;
-
-        try {
-          if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
-            throw new Error("Kamera-Zugriff erfordert HTTPS oder localhost. Stelle sicher, dass die App über HTTPS läuft.");
-          }
-          const codeReader = new ZXing.BrowserMultiFormatReader();
-          scanner = codeReader;
-          const devices = await navigator.mediaDevices.enumerateDevices();
-          const videoDevices = devices.filter((d) => d.kind === "videoinput");
-          const backCam =
-            videoDevices.find((d) => d.label.toLowerCase().includes("back") || d.label.toLowerCase().includes("rear")) ||
-            videoDevices[videoDevices.length - 1];
-          const deviceId = backCam ? backCam.deviceId : undefined;
-
-          await codeReader.decodeFromVideoDevice(deviceId, "scan-video", async (result, err) => {
-            if (result) {
-              const barcode = result.getText();
-              stopScanner();
-              await handleBarcode(barcode);
+          // ---------------------------------------------------------------------------
+          // API calls
+          // ---------------------------------------------------------------------------
+          async function fetchItems() {
+            showSpinner();
+            try {
+              items = await fetch("/api/items").then((r) => r.json());
+              render();
+            } finally {
+              hideSpinner();
             }
+          }
+          async function fetchStores() {
+            const stores = await fetch("/api/stores").then((r) => r.json());
+            const select = document.getElementById("f-store");
+            select.innerHTML = '<option value="">-- Auswählen oder neu --</option>';
+            // Add default stores
+            const defaultStores = ["Kaufland", "DM"];
+            defaultStores.forEach((store) => {
+              if (!stores.includes(store)) {
+                const option = document.createElement("option");
+                option.value = store;
+                option.textContent = store;
+                select.appendChild(option);
+              }
+            });
+            stores.forEach((store) => {
+              const option = document.createElement("option");
+              option.value = store;
+              option.textContent = store;
+              select.appendChild(option);
+            });
+            const newOption = document.createElement("option");
+            newOption.value = "neu";
+            newOption.textContent = "Neu hinzufügen...";
+            select.appendChild(newOption);
+            select.onchange = () => {
+              const newInput = document.getElementById("f-store-new");
+              if (select.value === "neu") {
+                newInput.style.display = "block";
+                newInput.focus();
+              } else {
+                newInput.style.display = "none";
+                newInput.value = "";
+              }
+            };
+          }
+          async function createItem(data) {
+            showSpinner();
+            try {
+              await fetch("/api/items", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+              fetchItems();
+            } finally {
+              hideSpinner();
+            }
+          }
+          async function updateItem(id, data) {
+            showSpinner();
+            try {
+              await fetch("/api/items/" + id, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+              fetchItems();
+            } finally {
+              hideSpinner();
+            }
+          }
+          async function changeQty(id, delta) {
+            showSpinner();
+            try {
+              await fetch("/api/items/" + id + "/qty", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ delta }),
+              });
+              fetchItems();
+            } finally {
+              hideSpinner();
+            }
+          }
+          async function delItem(id) {
+            showSpinner();
+            try {
+              await fetch("/api/items/" + id, { method: "DELETE" });
+              fetchItems();
+            } finally {
+              hideSpinner();
+            }
+          }
+
+          // ---------------------------------------------------------------------------
+          // Expiry helpers
+          // ---------------------------------------------------------------------------
+          function expiryInfo(exp) {
+            if (!exp) return null;
+            const d = Math.floor((new Date(exp) - new Date()) / 864e5);
+            if (d < 0) return { cls: "exp-danger", label: "Abgelaufen" };
+            if (d <= 7) return { cls: "exp-danger", label: d + "T" };
+            if (d <= 60) return { cls: "exp-warn", label: d <= 30 ? d + "T" : Math.round(d / 7) + "W" };
+            const mo = Math.round(d / 30);
+            return { cls: "exp-ok", label: mo > 24 ? "2+ J" : mo + "Mo" };
+          }
+          function fmtDate(d) {
+            if (!d) return "";
+            const [y, m, day] = d.split("-");
+            return `${day}.${m}.${y}`;
+          }
+
+          // ---------------------------------------------------------------------------
+          // Render
+          // ---------------------------------------------------------------------------
+          function render() {
+            const q = document.getElementById("search").value.toLowerCase();
+            let list = [...items].filter((i) => i.name.toLowerCase().includes(q));
+
+            if (activeTab === "food") list = list.filter((i) => i.cat === "food");
+            else if (activeTab === "house") list = list.filter((i) => i.cat === "house");
+            else if (activeTab === "hygiene") list = list.filter((i) => i.cat === "hygiene");
+            else if (activeTab === "expiry") {
+              list = list
+                .filter((i) => {
+                  if (!i.expiry) return false;
+                  return Math.floor((new Date(i.expiry) - new Date()) / 864e5) <= 90;
+                })
+                .sort((a, b) => a.expiry.localeCompare(b.expiry));
+            } else {
+              if (sortMode === "expiry")
+                list.sort((a, b) => {
+                  if (a.expiry && b.expiry) return a.expiry.localeCompare(b.expiry);
+                  if (a.expiry) return -1;
+                  if (b.expiry) return 1;
+                  return a.name.localeCompare(b.name);
+                });
+              else list.sort((a, b) => a.name.localeCompare(b.name));
+            }
+
+            // Stats
+            const soon = items.filter((i) => {
+              if (!i.expiry) return false;
+              return Math.floor((new Date(i.expiry) - new Date()) / 864e5) <= 60 && Math.floor((new Date(i.expiry) - new Date()) / 864e5) >= 0;
+            });
+            const exp = items.filter((i) => i.expiry && new Date(i.expiry) < new Date());
+            const totalValue = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(
+              items.reduce((s, i) => s + (i.price ? i.price * i.qty : 0), 0),
+            );
+            document.getElementById("stats-bar").innerHTML = `
+        <div class="stat-pill"><span>${items.length}</span> Produkte</div>
+        <div class="stat-pill"><span>${items.reduce((s, i) => s + i.qty, 0)}</span> Einheiten</div>
+        <div class="stat-pill"><span>${totalValue}</span> Gesamtwert</div>
+        ${soon.length ? `<div class="stat-pill warn"><span>${soon.length}</span> bald ablaufend</div>` : ""}
+        ${exp.length ? `<div class="stat-pill danger"><span>${exp.length}</span> abgelaufen</div>` : ""}
+      `;
+
+            // FIFO banner
+            document.getElementById("fifo-banner").innerHTML =
+              activeTab === "expiry" ? '<div class="fifo-banner">FIFO: Zuerst das Produkt oben verbrauchen — es läuft als nächstes ab.</div>' : "";
+
+            // List
+            if (!list.length) {
+              document.getElementById("list").innerHTML = '<div class="empty">Keine Produkte gefunden</div>';
+              return;
+            }
+
+            document.getElementById("list").innerHTML = list
+              .map((item) => {
+                const ei = expiryInfo(item.expiry);
+                const formattedPrice = item.price ? new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(item.price) : null;
+                return `<div class="item-card">
+          <div class="item-top">
+            <div style="flex:1">
+              <div class="item-name">${item.name}</div>
+              <div class="item-meta">
+                <span class="badge"><i class="${CAT_ICON[item.cat] || 'fas fa-question'}"></i> ${CATS[item.cat] || item.cat}</span>
+                ${item.barcode ? `<span style="font-size:11px;color:var(--text3);margin-left:6px">🔳 ${item.barcode}</span>` : ""}
+                ${formattedPrice ? `<span style="font-size:11px;color:var(--text3);margin-left:6px">💰 ${formattedPrice}</span>` : ""}
+                ${item.store ? `<span style="font-size:11px;color:var(--text3);margin-left:6px">🏪 ${item.store}</span>` : ""}
+              </div>
+            </div>
+            ${ei ? `<span class="expiry-badge ${ei.cls}">${ei.label}</span>` : ""}
+            <button class="btn-icon" onclick="openEdit(${item.id})">✎</button>
+          </div>
+          <div class="item-bottom">
+            <div class="qty-ctrl">
+              <button class="qty-btn" onclick="changeQty(${item.id},-1)">−</button>
+              <span class="qty-val">${item.qty}</span>
+              <span class="qty-unit">${item.unit}</span>
+              <button class="qty-btn" onclick="changeQty(${item.id},1)">+</button>
+            </div>
+            <div style="font-size:12px;color:var(--text2)">${item.expiry ? "MHD: " + fmtDate(item.expiry) : ""}</div>
+          </div>
+        </div>`;
+              })
+              .join("");
+          }
+
+          // ---------------------------------------------------------------------------
+          // Tabs + sort
+          // ---------------------------------------------------------------------------
+          document.querySelectorAll(".tab").forEach((t) => {
+            t.onclick = () => {
+              activeTab = t.dataset.tab;
+              document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active"));
+              t.classList.add("active");
+              render();
+            };
           });
-        } catch (e) {
-          alert("Kamera konnte nicht gestartet werden: " + e.message);
-          stopScanner();
-        }
-      }
+          document.getElementById("btn-sort").onclick = () => {
+            sortMode = sortMode === "expiry" ? "name" : "expiry";
+            document.getElementById("btn-sort").title = sortMode === "expiry" ? "Sortiert nach Ablauf" : "Sortiert nach Name";
+            render();
+          };
 
-      function stopScanner() {
-        if (scanner) {
-          try {
-            scanner.reset();
-          } catch (e) {}
-        }
-        scanner = null;
-        scannerActive = false;
-        document.getElementById("scan-area").style.display = "none";
-        document.getElementById("btn-scan-toggle").innerHTML = "<span>📷</span> Barcode scannen";
-      }
+          // ---------------------------------------------------------------------------
+          // Modal
+          // ---------------------------------------------------------------------------
+          document.getElementById("fab").onclick = openAdd;
 
-      async function handleBarcode(barcode) {
-        const res = document.getElementById("scan-result");
-        res.textContent = "Suche Produkt…";
-        res.classList.add("show");
+          function openAdd() {
+            editId = null;
+            document.getElementById("modal-title-text").textContent = "Produkt hinzufügen";
+            document.getElementById("f-name").value = "";
+            document.getElementById("f-qty").value = "1";
+            document.getElementById("f-unit").value = "Stk";
+            document.getElementById("f-cat").value = "food";
+            document.getElementById("f-expiry").value = "";
+            document.getElementById("f-price").value = "";
+            document.getElementById("f-store").value = "";
+            document.getElementById("f-cat-new").style.display = "none";
+            document.getElementById("f-store-new").style.display = "none";
+            document.getElementById("modal-delete").style.display = "none";
+            fetchStores();
+            document.getElementById("modal-overlay").classList.add("open");
+          }
 
-        const data = await fetch("/api/barcode/" + barcode).then((r) => r.json());
-        if (data.found && data.name) {
-          document.getElementById("f-name").value = data.name;
-          res.textContent = "✓ Gefunden: " + data.name + (data.brands ? " (" + data.brands + ")" : "");
-        } else {
-          res.textContent = "Barcode: " + barcode + " — Name bitte manuell eintragen";
-          document.getElementById("f-name").focus();
-        }
-      }
+          function openEdit(id) {
+            const item = items.find((i) => i.id === id);
+            if (!item) return;
+            editId = id;
+            document.getElementById("modal-title-text").textContent = "Produkt bearbeiten";
+            document.getElementById("f-name").value = item.name;
+            document.getElementById("f-qty").value = item.qty;
+            document.getElementById("f-unit").value = item.unit;
+            document.getElementById("f-cat").value = item.cat;
+            document.getElementById("f-expiry").value = item.expiry || "";
+            document.getElementById("f-price").value = item.price ? item.price.toString().replace(".", ",") : "";
+            document.getElementById("f-store").value = item.store || "";
+            document.getElementById("f-cat-new").style.display = "none";
+            document.getElementById("f-store-new").style.display = "none";
+            fetchStores();
+            document.getElementById("modal-delete").style.display = "block";
+            document.getElementById("modal-overlay").classList.add("open");
+            stopScanner();
+          }
 
-      // ---------------------------------------------------------------------------
-      // Init
-      // ---------------------------------------------------------------------------
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/static/sw.js')
-          .then((registration) => {
-            console.log('Service Worker registered:', registration);
-          })
-          .catch((error) => {
-            console.log('Service Worker registration failed:', error);
-          });
-      }
-      fetchItems();
+          function closeModal() {
+            document.getElementById("modal-overlay").classList.remove("open");
+            stopScanner();
+          }
+
+          function submitModal() {
+            let catValue = document.getElementById("f-cat").value;
+            if (catValue === "neu") {
+              catValue = document.getElementById("f-cat-new").value.trim();
+            }
+            let storeValue = document.getElementById("f-store").value;
+            if (storeValue === "neu") {
+              storeValue = document.getElementById("f-store-new").value.trim();
+            }
+            const data = {
+              name: document.getElementById("f-name").value.trim(),
+              qty: parseInt(document.getElementById("f-qty").value) || 1,
+              unit: document.getElementById("f-unit").value.trim() || "Stk",
+              cat: catValue,
+              expiry: document.getElementById("f-expiry").value || null,
+              price: parseFloat(document.getElementById("f-price").value.replace(",", ".")) || null,
+              store: storeValue || null,
+            };
+            if (!data.name) return;
+            (async () => {
+              if (editId) await updateItem(editId, data);
+              else await createItem(data);
+              closeModal();
+            })();
+          }
+
+          function deleteItem() {
+            if (!confirm("Produkt löschen?")) return;
+            (async () => {
+              await delItem(editId);
+              closeModal();
+            })();
+          }
+
+          document.getElementById("modal-overlay").onclick = (e) => {
+            if (e.target === document.getElementById("modal-overlay") && !document.activeElement.closest("#modal")) closeModal();
+          };
+
+          // ---------------------------------------------------------------------------
+          // Barcode scanner
+          // ---------------------------------------------------------------------------
+          async function toggleScanner() {
+            if (scannerActive) {
+              stopScanner();
+              return;
+            }
+            const sa = document.getElementById("scan-area");
+            sa.style.display = "block";
+            document.getElementById("btn-scan-toggle").textContent = "⏹ Scanner stoppen";
+            document.getElementById("scan-result").classList.remove("show");
+            scannerActive = true;
+
+            try {
+              if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+                throw new Error("Kamera-Zugriff erfordert HTTPS oder localhost. Stelle sicher, dass die App über HTTPS läuft.");
+              }
+              const codeReader = new ZXing.BrowserMultiFormatReader();
+              scanner = codeReader;
+              const devices = await navigator.mediaDevices.enumerateDevices();
+              const videoDevices = devices.filter((d) => d.kind === "videoinput");
+              const backCam =
+                videoDevices.find((d) => d.label.toLowerCase().includes("back") || d.label.toLowerCase().includes("rear")) ||
+                videoDevices[videoDevices.length - 1];
+              const deviceId = backCam ? backCam.deviceId : undefined;
+
+              await codeReader.decodeFromVideoDevice(deviceId, "scan-video", async (result, err) => {
+                if (result) {
+                  const barcode = result.getText();
+                  stopScanner();
+                  await handleBarcode(barcode);
+                }
+              });
+            } catch (e) {
+              alert("Kamera konnte nicht gestartet werden: " + e.message);
+              stopScanner();
+            }
+          }
+
+          function stopScanner() {
+            if (scanner) {
+              try {
+                scanner.reset();
+              } catch (e) {}
+            }
+            scanner = null;
+            scannerActive = false;
+            document.getElementById("scan-area").style.display = "none";
+            document.getElementById("btn-scan-toggle").innerHTML = "<span>📷</span> Barcode scannen";
+          }
+
+          async function handleBarcode(barcode) {
+            const res = document.getElementById("scan-result");
+            res.textContent = "Suche Produkt…";
+            res.classList.add("show");
+
+            const data = await fetch("/api/barcode/" + barcode).then((r) => r.json());
+            if (data.found && data.name) {
+              document.getElementById("f-name").value = data.name;
+              res.textContent = "✓ Gefunden: " + data.name + (data.brands ? " (" + data.brands + ")" : "");
+            } else {
+              res.textContent = "Barcode: " + barcode + " — Name bitte manuell eintragen";
+              document.getElementById("f-name").focus();
+            }
+          }
+
+          // ---------------------------------------------------------------------------
+          // Init
+          // ---------------------------------------------------------------------------
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/static/sw.js')
+              .then((registration) => {
+                console.log('Service Worker registered:', registration);
+              })
+              .catch((error) => {
+                console.log('Service Worker registration failed:', error);
+              });
+          }
+          fetchItems();
+          // Init category select
+          document.getElementById("f-cat").onchange = () => {
+            const newInput = document.getElementById("f-cat-new");
+            if (document.getElementById("f-cat").value === "neu") {
+              newInput.style.display = "block";
+              newInput.focus();
+            } else {
+              newInput.style.display = "none";
+              newInput.value = "";
+            }
+          };
     </script>
   </body>
 </html>
