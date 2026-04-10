@@ -1,6 +1,6 @@
 # Vorrats-App
 
-Eine einfache Web-App zur Verwaltung von Vorräten mit Barcode-Scanner, entwickelt mit FastAPI (Backend) und Vanilla JavaScript (Frontend).
+Eine einfache Web-App zur Verwaltung von Vorräten mit Barcode-Scanner, entwickelt mit FastAPI (Backend) und Vanilla JavaScript (Frontend). Vollständig lokal laufend, keine Cloud-Abhängigkeiten.
 
 ## Features
 
@@ -12,6 +12,12 @@ Eine einfache Web-App zur Verwaltung von Vorräten mit Barcode-Scanner, entwicke
 - ✅ Suche und Filter
 - ✅ FIFO-Hinweise für ablaufende Produkte
 - ✅ SQLite-Datenbank
+- ✅ Preis pro Stück und Geschäft (Store) tracking
+- ✅ PWA-Unterstützung (Offline-fähig, installierbar)
+- ✅ FontAwesome-Icons für Kategorien
+- ✅ Benutzerdefinierte Kategorien
+- ✅ Deutsche Lokalisierung (Preise in EUR, deutsche Texte)
+- ✅ CORS-Unterstützung für lokale Entwicklung
 
 ## Lokale Entwicklung
 
@@ -49,6 +55,8 @@ Eine einfache Web-App zur Verwaltung von Vorräten mit Barcode-Scanner, entwicke
    python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
    ```
 
+   **Hinweis:** Die App initialisiert automatisch die SQLite-Datenbank mit den neuen Feldern für Preis und Geschäft. Bestehende Datenbanken werden migriert.
+
 5. **App öffnen:**
    Öffne `http://localhost:8000` im Browser.
 
@@ -56,6 +64,13 @@ Eine einfache Web-App zur Verwaltung von Vorräten mit Barcode-Scanner, entwicke
 
 - Erfordert HTTPS oder localhost für Kamera-Zugriff.
 - Lokal funktioniert es, im Homelab über HTTP nicht – verwende HTTPS (siehe Deployment).
+
+### PWA-Features
+
+- **Offline-Unterstützung:** Service Worker cached statische Assets
+- **Installierbar:** Manifest für App-Installation auf Mobilgeräten
+- **Responsive:** Funktioniert auf Desktop und Mobile
+- **Icons:** FontAwesome-Icons für Kategorien, benutzerdefinierte Kategorien möglich
 
 ## Deployment mit Podman
 
@@ -145,15 +160,18 @@ Für sicheren Zugriff und Barcode-Scanner im Homelab:
 - `PUT /api/items/{id}` – Produkt bearbeiten
 - `DELETE /api/items/{id}` – Produkt löschen
 - `POST /api/items/{id}/qty` – Menge ändern
-- `GET /api/barcode/{barcode}` – Barcode nachschlagen
+- `GET /api/stores` – Alle gespeicherten Geschäfte
+- `GET /api/barcode/{barcode}` – Barcode nachschlagen (OpenFoodFacts)
 
 ## Struktur
 
 ```
 vorrats-app/
-├── main.py              # FastAPI Backend
+├── main.py              # FastAPI Backend mit CORS
 ├── static/
-│   └── index.html       # Frontend
+│   ├── index.html       # Frontend (PWA, deutsche Lokalisierung)
+│   ├── manifest.json    # PWA-Manifest
+│   └── sw.js            # Service Worker für Offline
 ├── requirements.txt     # Python-Abhängigkeiten
 ├── Dockerfile           # Container-Build
 ├── docker-compose.prod.yml  # Prod-Setup
