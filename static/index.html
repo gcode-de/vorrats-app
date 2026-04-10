@@ -348,6 +348,7 @@
         background: var(--bg2);
         color: var(--text);
         font-size: 15px;
+        height: 40px;
       }
       .field-row {
         display: flex;
@@ -524,6 +525,19 @@
           <label>Mindesthaltbarkeitsdatum</label>
           <input id="f-expiry" type="date" />
         </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Kaufpreis pro Stück (€)</label>
+            <input id="f-price" type="text" placeholder="z.B. 1,50" pattern="[0-9]+([,\.][0-9]+)?" />
+          </div>
+          <div class="field">
+            <label>Geschäft</label>
+            <select id="f-store">
+              <option value="">-- Auswählen oder neu --</option>
+            </select>
+            <input id="f-store-new" type="text" placeholder="Neues Geschäft" style="margin-top: 4px; display: none" />
+          </div>
+        </div>
 
         <button class="btn-primary" id="modal-submit" onclick="submitModal()">Speichern</button>
         <button class="btn-secondary" id="modal-delete" style="display: none; color: var(--red)" onclick="deleteItem()">Löschen</button>
@@ -548,6 +562,41 @@
       async function fetchItems() {
         items = await fetch("/api/items").then((r) => r.json());
         render();
+      }
+      async function fetchStores() {
+        const stores = await fetch("/api/stores").then((r) => r.json());
+        const select = document.getElementById("f-store");
+        select.innerHTML = '<option value="">-- Auswählen oder neu --</option>';
+        // Add default stores
+        const defaultStores = ["Kaufland", "DM"];
+        defaultStores.forEach((store) => {
+          if (!stores.includes(store)) {
+            const option = document.createElement("option");
+            option.value = store;
+            option.textContent = store;
+            select.appendChild(option);
+          }
+        });
+        stores.forEach((store) => {
+          const option = document.createElement("option");
+          option.value = store;
+          option.textContent = store;
+          select.appendChild(option);
+        });
+        const newOption = document.createElement("option");
+        newOption.value = "neu";
+        newOption.textContent = "Neu hinzufügen...";
+        select.appendChild(newOption);
+        select.onchange = () => {
+          const newInput = document.getElementById("f-store-new");
+          if (select.value === "neu") {
+            newInput.style.display = "block";
+            newInput.focus();
+          } else {
+            newInput.style.display = "none";
+            newInput.value = "";
+          }
+        };
       }
       async function createItem(data) {
         await fetch("/api/items", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
@@ -622,9 +671,11 @@
           return Math.floor((new Date(i.expiry) - new Date()) / 864e5) <= 60 && Math.floor((new Date(i.expiry) - new Date()) / 864e5) >= 0;
         });
         const exp = items.filter((i) => i.expiry && new Date(i.expiry) < new Date());
+        const totalValue = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(items.reduce((s, i) => s + (i.price ? i.price * i.qty : 0), 0));
         document.getElementById("stats-bar").innerHTML = `
     <div class="stat-pill"><span>${items.length}</span> Produkte</div>
     <div class="stat-pill"><span>${items.reduce((s, i) => s + i.qty, 0)}</span> Einheiten</div>
+    <div class="stat-pill"><span>${totalValue}</span> Gesamtwert</div>
     ${soon.length ? `<div class="stat-pill warn"><span>${soon.length}</span> bald ablaufend</div>` : ""}
     ${exp.length ? `<div class="stat-pill danger"><span>${exp.length}</span> abgelaufen</div>` : ""}
   `;
@@ -642,6 +693,7 @@
         document.getElementById("list").innerHTML = list
           .map((item) => {
             const ei = expiryInfo(item.expiry);
+            const formattedPrice = item.price ? new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(item.price) : null;
             return `<div class="item-card">
       <div class="item-top">
         <div style="flex:1">
@@ -649,6 +701,8 @@
           <div class="item-meta">
             <span class="badge ${CAT_BADGE[item.cat] || ""}">${CATS[item.cat] || item.cat}</span>
             ${item.barcode ? `<span style="font-size:11px;color:var(--text3);margin-left:6px">🔳 ${item.barcode}</span>` : ""}
+            ${formattedPrice ? `<span style="font-size:11px;color:var(--text3);margin-left:6px">💰 ${formattedPrice}</span>` : ""}
+            ${item.store ? `<span style="font-size:11px;color:var(--text3);margin-left:6px">🏪 ${item.store}</span>` : ""}
           </div>
         </div>
         ${ei ? `<span class="expiry-badge ${ei.cls}">${ei.label}</span>` : ""}
@@ -698,7 +752,11 @@
         document.getElementById("f-unit").value = "Stk";
         document.getElementById("f-cat").value = "food";
         document.getElementById("f-expiry").value = "";
+        document.getElementById("f-price").value = "";
+        document.getElementById("f-store").value = "";
+        document.getElementById("f-store-new").style.display = "none";
         document.getElementById("modal-delete").style.display = "none";
+        fetchStores();
         document.getElementById("modal-overlay").classList.add("open");
       }
 
@@ -712,6 +770,10 @@
         document.getElementById("f-unit").value = item.unit;
         document.getElementById("f-cat").value = item.cat;
         document.getElementById("f-expiry").value = item.expiry || "";
+        document.getElementById("f-price").value = item.price ? item.price.toString().replace('.', ',') : "";
+        document.getElementById("f-store").value = item.store || "";
+        document.getElementById("f-store-new").style.display = "none";
+        fetchStores();
         document.getElementById("modal-delete").style.display = "block";
         document.getElementById("modal-overlay").classList.add("open");
         stopScanner();
@@ -723,12 +785,18 @@
       }
 
       function submitModal() {
+        let storeValue = document.getElementById("f-store").value;
+        if (storeValue === "neu") {
+          storeValue = document.getElementById("f-store-new").value.trim();
+        }
         const data = {
           name: document.getElementById("f-name").value.trim(),
           qty: parseInt(document.getElementById("f-qty").value) || 1,
           unit: document.getElementById("f-unit").value.trim() || "Stk",
           cat: document.getElementById("f-cat").value,
           expiry: document.getElementById("f-expiry").value || null,
+          price: parseFloat(document.getElementById("f-price").value.replace(',', '.')) || null,
+          store: storeValue || null,
         };
         if (!data.name) return;
         (async () => {
@@ -765,6 +833,9 @@
         scannerActive = true;
 
         try {
+          if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+            throw new Error("Kamera-Zugriff erfordert HTTPS oder localhost. Stelle sicher, dass die App über HTTPS läuft.");
+          }
           const codeReader = new ZXing.BrowserMultiFormatReader();
           scanner = codeReader;
           const devices = await navigator.mediaDevices.enumerateDevices();

@@ -32,6 +32,8 @@ def init_db():
             cat       TEXT NOT NULL DEFAULT 'food',
             expiry    TEXT,
             barcode   TEXT,
+            price     REAL,
+            store     TEXT,
             created_at TEXT NOT NULL
         )
     """)
@@ -61,6 +63,8 @@ class ItemCreate(BaseModel):
     cat: str = "food"
     expiry: Optional[str] = None
     barcode: Optional[str] = None
+    price: Optional[float] = None
+    store: Optional[str] = None
 
 class ItemUpdate(BaseModel):
     name: Optional[str] = None
@@ -69,6 +73,8 @@ class ItemUpdate(BaseModel):
     cat: Optional[str] = None
     expiry: Optional[str] = None
     barcode: Optional[str] = None
+    price: Optional[float] = None
+    store: Optional[str] = None
 
 class QtyChange(BaseModel):
     delta: int
@@ -87,20 +93,25 @@ def now():
 # ---------------------------------------------------------------------------
 # Routes – items
 # ---------------------------------------------------------------------------
-
 @app.get("/api/items")
-def list_items():
+def get_items():
     con = get_db()
-    rows = con.execute("SELECT * FROM items ORDER BY expiry ASC NULLS LAST, name ASC").fetchall()
+    rows = con.execute("SELECT * FROM items ORDER BY name").fetchall()
     con.close()
     return [row_to_dict(r) for r in rows]
+@app.get("/api/stores")
+def list_stores():
+    con = get_db()
+    rows = con.execute("SELECT DISTINCT store FROM items WHERE store IS NOT NULL ORDER BY store").fetchall()
+    con.close()
+    return [row["store"] for row in rows]
 
 @app.post("/api/items", status_code=201)
 def create_item(item: ItemCreate):
     con = get_db()
     cur = con.execute(
-        "INSERT INTO items (name,qty,unit,cat,expiry,barcode,created_at) VALUES (?,?,?,?,?,?,?)",
-        (item.name, item.qty, item.unit, item.cat, item.expiry or None, item.barcode or None, now())
+        "INSERT INTO items (name,qty,unit,cat,expiry,barcode,price,store,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+        (item.name, item.qty, item.unit, item.cat, item.expiry or None, item.barcode or None, item.price, item.store, now())
     )
     con.commit()
     row = con.execute("SELECT * FROM items WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -186,6 +197,8 @@ async def lookup_barcode(barcode: str):
 # ---------------------------------------------------------------------------
 
 # app.mount("/static", StaticFiles(directory="./static"), name="static")
+
+app.mount("/static", StaticFiles(directory="./static"), name="static")
 
 @app.get("/")
 def root():
