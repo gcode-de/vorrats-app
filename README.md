@@ -17,6 +17,18 @@ Eine einfache Web-App zur Verwaltung von Vorräten mit Barcode-Scanner, entwicke
 - ✅ FontAwesome-Icons für Kategorien
 - ✅ Benutzerdefinierte Kategorien
 - ✅ Deutsche Lokalisierung (Preise in EUR, deutsche Texte)
+- ✅ Multi-User-Support (separate DBs pro User)
+- ✅ Cookie-basierte automatische Anmeldung
+- ✅ Persistente Daten in Containern (Podman/Docker)
+
+## Multi-User-Support
+
+Die App unterstützt mehrere unabhängige User:
+- Jeder User hat eine eigene SQLite-Datenbank (z.B. `Anna.db`, `Max.db`).
+- Zugriff über URL-Parameter: `http://localhost:8000/?user=DeinName`
+- Automatische Cookie-basierte Anmeldung (1 Jahr gültig).
+- Bei erstem Besuch: User-Name eingeben, dann automatische Weiterleitung.
+- Daten sind vollständig isoliert und persistent.
 
 ## Lokale Entwicklung
 
@@ -54,7 +66,7 @@ Eine einfache Web-App zur Verwaltung von Vorräten mit Barcode-Scanner, entwicke
    python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
    ```
 
-   **Hinweis:** Die App initialisiert automatisch die SQLite-Datenbank mit den neuen Feldern für Preis und Geschäft. Bestehende Datenbanken werden migriert.
+   **Hinweis:** Die App verwendet separate SQLite-Datenbanken pro User. Bei erstem Zugriff wird die DB automatisch initialisiert.
 
 5. **App öffnen:**
    Öffne `http://localhost:8000` im Browser.
@@ -96,6 +108,8 @@ Eine einfache Web-App zur Verwaltung von Vorräten mit Barcode-Scanner, entwicke
    ```
    podman volume create vorrat-data
    ```
+
+   **Hinweis:** User-DBs werden persistent in `/data/` gespeichert (z.B. `/data/Anna.db`).
 
 4. **Container starten:**
 
