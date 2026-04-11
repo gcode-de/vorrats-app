@@ -24,6 +24,7 @@ Eine einfache Web-App zur Verwaltung von Vorräten mit Barcode-Scanner, entwicke
 ## Multi-User-Support
 
 Die App unterstützt mehrere unabhängige User:
+
 - Jeder User hat eine eigene SQLite-Datenbank (z.B. `Anna.db`, `Max.db`).
 - Zugriff über URL-Parameter: `http://localhost:8000/?user=DeinName`
 - Automatische Cookie-basierte Anmeldung (1 Jahr gültig).
