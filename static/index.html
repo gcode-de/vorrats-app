@@ -489,9 +489,10 @@
   </head>
   <body>
     <div class="header">
-      <h1>🥫 Vorrat</h1>
+      <h1>🥫 Vorrat <span id="user-name"></span></h1>
       <div class="header-actions">
         <button class="btn-icon" id="btn-sort" title="Sortierung">⇅</button>
+        <button class="btn-icon" id="btn-logout" title="User wechseln" onclick="logout()">🚪</button>
       </div>
     </div>
 
@@ -581,7 +582,14 @@
 
     <script>
       const API = "";
-      const user = new URLSearchParams(window.location.search).get("user");
+      // Cookie lesen
+      function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(";").shift();
+        return null;
+      }
+      const user = getCookie("vorrat_user");
       let items = [];
       let activeTab = "all";
       let sortMode = "expiry";
@@ -591,6 +599,9 @@
 
       const CATS = { food: "Lebensmittel", house: "Haushalt", hygiene: "Hygiene" };
       const CAT_ICON = { food: "fas fa-utensils", house: "fas fa-home", hygiene: "fas fa-pump-soap" };
+
+      // User im Header anzeigen
+      document.getElementById("user-name").textContent = user ? ` - ${user}` : "";
 
       // ---------------------------------------------------------------------------
       // Spinner
@@ -608,14 +619,14 @@
       async function fetchItems() {
         showSpinner();
         try {
-          items = await fetch(`/api/items?user=${user}`).then((r) => r.json());
+          items = await fetch(`/api/items`).then((r) => r.json());
           render();
         } finally {
           hideSpinner();
         }
       }
       async function fetchStores() {
-        const stores = await fetch(`/api/stores?user=${user}`).then((r) => r.json());
+        const stores = await fetch(`/api/stores`).then((r) => r.json());
         const select = document.getElementById("f-store");
         select.innerHTML = '<option value="">-- Auswählen oder neu --</option>';
         // Add default stores
@@ -652,7 +663,7 @@
       async function createItem(data) {
         showSpinner();
         try {
-          await fetch(`/api/items?user=${user}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+          await fetch(`/api/items`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
           fetchItems();
         } finally {
           hideSpinner();
@@ -661,7 +672,7 @@
       async function updateItem(id, data) {
         showSpinner();
         try {
-          await fetch(`/api/items/${id}?user=${user}`, {
+          await fetch(`/api/items/${id}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(data),
@@ -674,7 +685,7 @@
       async function changeQty(id, delta) {
         showSpinner();
         try {
-          await fetch(`/api/items/${id}/qty?user=${user}`, {
+          await fetch(`/api/items/${id}/qty`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ delta }),
@@ -687,7 +698,7 @@
       async function delItem(id) {
         showSpinner();
         try {
-          await fetch(`/api/items/${id}?user=${user}`, { method: "DELETE" });
+          await fetch(`/api/items/${id}`, { method: "DELETE" });
           fetchItems();
         } finally {
           hideSpinner();
@@ -966,6 +977,14 @@
           res.textContent = "Barcode: " + barcode + " — Name bitte manuell eintragen";
           document.getElementById("f-name").focus();
         }
+      }
+
+      // ---------------------------------------------------------------------------
+      // Logout
+      // ---------------------------------------------------------------------------
+      function logout() {
+        document.cookie = "vorrat_user=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        window.location.reload();
       }
 
       // ---------------------------------------------------------------------------

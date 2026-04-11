@@ -18,18 +18,20 @@ Eine einfache Web-App zur Verwaltung von Vorräten mit Barcode-Scanner, entwicke
 - ✅ Benutzerdefinierte Kategorien
 - ✅ Deutsche Lokalisierung (Preise in EUR, deutsche Texte)
 - ✅ Multi-User-Support (separate DBs pro User)
+- ✅ Sichere Authentifizierung mit Passwort (SHA-256 Hash)
 - ✅ Cookie-basierte automatische Anmeldung
 - ✅ Persistente Daten in Containern (Podman/Docker)
 
 ## Multi-User-Support
 
-Die App unterstützt mehrere unabhängige User:
+Die App unterstützt mehrere unabhängige User mit sicherer Authentifizierung:
 
 - Jeder User hat eine eigene SQLite-Datenbank (z.B. `Anna.db`, `Max.db`).
-- Zugriff über URL-Parameter: `http://localhost:8000/?user=DeinName`
+- Sichere Anmeldung mit Name und Passwort (SHA-256 gehasht gespeichert).
+- Neue User werden automatisch bei erster Anmeldung erstellt.
 - Automatische Cookie-basierte Anmeldung (1 Jahr gültig).
-- Bei erstem Besuch: User-Name eingeben, dann automatische Weiterleitung.
 - Daten sind vollständig isoliert und persistent.
+- Logout-Button zum User-Wechsel.
 
 ## Lokale Entwicklung
 
