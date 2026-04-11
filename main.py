@@ -129,9 +129,28 @@ def root(request: Request):
     <br>
     <button onclick="selectUser()">Weiter</button>
     <script>
+        // Cookie lesen
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+            return null;
+        }
+        // Cookie setzen (1 Jahr Laufzeit)
+        function setCookie(name, value, days) {
+            const date = new Date();
+            date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+            document.cookie = `${name}=${value}; expires=${date.toUTCString()}; path=/`;
+        }
+        // Beim Laden prüfen, ob Cookie vorhanden
+        const savedUser = getCookie('vorrat_user');
+        if (savedUser) {
+            window.location.href = `/?user=${encodeURIComponent(savedUser)}`;
+        }
         function selectUser() {
             const user = document.getElementById('username').value.trim();
             if (user) {
+                setCookie('vorrat_user', user, 365); // 1 Jahr
                 window.location.href = `/?user=${encodeURIComponent(user)}`;
             }
         }
