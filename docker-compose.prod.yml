@@ -6,7 +6,7 @@ services:
     container_name: vorratsverwaltung
     restart: unless-stopped
     environment:
-      - DB_PATH=/data/vorrat.db
+      # DB_PATH wird dynamisch gesetzt pro User
     volumes:
       - vorrat-data:/data
     networks:

@@ -17,13 +17,13 @@ app = FastAPI(title="Vorratsverwaltung")
 
 def get_db(user: str):
     global DB_PATH
-    DB_PATH = f"./{user}.db"
+    DB_PATH = f"/data/{user}.db"
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
     return con
 
 def init_db(user: str):
-    os.makedirs(os.path.dirname(f"./{user}.db"), exist_ok=True)
+    os.makedirs("/data", exist_ok=True)
     con = get_db(user)
     con.execute("""
         CREATE TABLE IF NOT EXISTS items (
