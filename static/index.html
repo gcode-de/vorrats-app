@@ -349,6 +349,19 @@
       .field-row .field {
         flex: 1;
       }
+      .btn-primary {
+        width: 100%;
+        padding: 11px;
+        background: var(--teal);
+        color: white;
+        border: none;
+        border-radius: var(--radius-sm);
+        font-size: 14px;
+        cursor: pointer;
+      }
+      .btn-primary:hover {
+        background: var(--teal-text);
+      }
       .btn-primary:disabled {
         opacity: 0.6;
         cursor: not-allowed;
@@ -568,6 +581,7 @@
 
     <script>
           const API = "";
+          const user = new URLSearchParams(window.location.search).get('user');
           let items = [];
           let activeTab = "all";
           let sortMode = "expiry";
@@ -594,14 +608,14 @@
           async function fetchItems() {
             showSpinner();
             try {
-              items = await fetch("/api/items").then((r) => r.json());
+              items = await fetch(`/api/items?user=${user}`).then((r) => r.json());
               render();
             } finally {
               hideSpinner();
             }
           }
           async function fetchStores() {
-            const stores = await fetch("/api/stores").then((r) => r.json());
+            const stores = await fetch(`/api/stores?user=${user}`).then((r) => r.json());
             const select = document.getElementById("f-store");
             select.innerHTML = '<option value="">-- Auswählen oder neu --</option>';
             // Add default stores
@@ -638,7 +652,7 @@
           async function createItem(data) {
             showSpinner();
             try {
-              await fetch("/api/items", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+              await fetch(`/api/items?user=${user}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
               fetchItems();
             } finally {
               hideSpinner();
@@ -647,7 +661,7 @@
           async function updateItem(id, data) {
             showSpinner();
             try {
-              await fetch("/api/items/" + id, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+              await fetch(`/api/items/${id}?user=${user}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
               fetchItems();
             } finally {
               hideSpinner();
@@ -656,7 +670,7 @@
           async function changeQty(id, delta) {
             showSpinner();
             try {
-              await fetch("/api/items/" + id + "/qty", {
+              await fetch(`/api/items/${id}/qty?user=${user}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ delta }),
@@ -669,7 +683,7 @@
           async function delItem(id) {
             showSpinner();
             try {
-              await fetch("/api/items/" + id, { method: "DELETE" });
+              await fetch(`/api/items/${id}?user=${user}`, { method: "DELETE" });
               fetchItems();
             } finally {
               hideSpinner();
@@ -940,7 +954,7 @@
             res.textContent = "Suche Produkt…";
             res.classList.add("show");
 
-            const data = await fetch("/api/barcode/" + barcode).then((r) => r.json());
+            const data = await fetch(`/api/barcode/${barcode}`).then((r) => r.json());
             if (data.found && data.name) {
               document.getElementById("f-name").value = data.name;
               res.textContent = "✓ Gefunden: " + data.name + (data.brands ? " (" + data.brands + ")" : "");

@@ -17,7 +17,6 @@ Eine einfache Web-App zur Verwaltung von Vorräten mit Barcode-Scanner, entwicke
 - ✅ FontAwesome-Icons für Kategorien
 - ✅ Benutzerdefinierte Kategorien
 - ✅ Deutsche Lokalisierung (Preise in EUR, deutsche Texte)
-- ✅ CORS-Unterstützung für lokale Entwicklung
 
 ## Lokale Entwicklung
 
