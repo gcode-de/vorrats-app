@@ -337,9 +337,17 @@
         justify-content: center;
         font-size: 15px;
         color: var(--text2);
+        white-space: nowrap;
+        min-width: 90px;
+        padding: 0 8px;
       }
       .btn-icon:hover {
         background: var(--bg2);
+      }
+
+      #btn-select,
+      #btn-logout {
+        min-width: 40px;
       }
 
       /* FAB */
@@ -567,14 +575,15 @@
       /* Responsive Design für Mobile */
       @media (max-width: 768px) {
         .filters-row {
-          flex-direction: column;
+          flex-direction: row;
           gap: 8px;
           padding: 8px 12px;
         }
         .category-filter select,
         .location-filter select {
-          width: 100%;
+          width: auto;
           min-width: unset;
+          flex: 1;
         }
         .expiry-tab {
           width: 100%;
@@ -584,12 +593,13 @@
   </head>
   <body>
     <div class="header">
-      <h1>🥫 Vorrat <span id="user-name"></span></h1>
+      <h1><i class="fas fa-archive" style="margin-right: 8px"></i> Vorrat <span id="user-name"></span></h1>
       <div class="header-actions">
-        <button class="btn-icon" id="btn-select" title="Mehrfachauswahl" onclick="toggleSelectMode()">✅</button>
-        <button class="btn-icon" id="btn-sort" title="Sortierung" onclick="cycleSort()">⇅</button>
-        <span id="sort-label" style="font-size: 12px; color: var(--text2); margin-left: 4px">Ablauf</span>
-        <button class="btn-icon" id="btn-logout" title="User wechseln" onclick="logout()">🚪</button>
+        <button class="btn-icon" id="btn-select" title="Mehrfachauswahl" onclick="toggleSelectMode()"><i class="fas fa-check-square"></i></button>
+        <button class="btn-icon" id="btn-sort" title="Sortiert nach Ablauf" onclick="cycleSort()">
+          <i class="fas fa-sort" style="margin-right: 5px"></i> Ablauf
+        </button>
+        <button class="btn-icon" id="btn-logout" title="User wechseln" onclick="logout()"><i class="fas fa-sign-out-alt"></i></button>
       </div>
     </div>
 
@@ -602,7 +612,7 @@
           <option value="food">Lebensmittel</option>
           <option value="house">Haushalt</option>
           <option value="hygiene">Hygiene</option>
-          <option value="expiry">⚠ Ablauf</option>
+          <option value="expiry"><i class="fas fa-exclamation-triangle"></i> Ablauf</option>
         </select>
       </div>
       <div class="location-filter">
@@ -642,18 +652,18 @@
     <div class="list" id="list"></div>
     <div id="bulk-container"></div>
 
-    <button class="fab" id="fab">＋</button>
+    <button class="fab" id="fab"><i class="fas fa-plus"></i></button>
 
     <!-- Add/Edit Modal -->
     <div class="overlay" id="modal-overlay">
       <div class="modal" id="modal">
         <div class="modal-title">
           <span id="modal-title-text">Produkt hinzufügen</span>
-          <button class="modal-close" onclick="closeModal()">✕</button>
+          <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
         </div>
 
         <!-- Barcode scan button -->
-        <button class="btn-scan" id="btn-scan-toggle" onclick="toggleScanner()"><span>📷</span> Barcode scannen</button>
+        <button class="btn-scan" id="btn-scan-toggle" onclick="toggleScanner()"><i class="fas fa-camera"></i> Barcode scannen</button>
         <div id="scan-area" class="scan-area" style="display: none">
           <video id="scan-video" playsinline muted autoplay></video>
           <div class="scan-overlay"><div class="scan-frame"></div></div>
@@ -718,7 +728,7 @@
       <div class="modal" id="bulk-modal">
         <div class="modal-title">
           <span>Bulk-Bearbeitung</span>
-          <button class="modal-close" onclick="closeBulkModal()">✕</button>
+          <button class="modal-close" onclick="closeBulkModal()"><i class="fas fa-times"></i></button>
         </div>
         <div class="field">
           <label>Geschäft</label>
@@ -916,6 +926,11 @@
         }
         render();
       }
+      function clearSelection() {
+        selectedItems = [];
+        showCheckboxes = false;
+        render();
+      }
       function bulkUpdate(store, location) {
         if (!selectedItems.length) return;
         fetch("/api/items/bulk-update", {
@@ -1085,28 +1100,28 @@
             const ei = expiryInfo(item.expiry);
             const formattedPrice = item.price ? new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(item.price) : null;
             const isSelected = selectedItems.includes(item.id);
-            return `<div class="item-card ${isSelected ? "selected" : ""}">
+            return `<div class="item-card ${isSelected ? "selected" : ""}" ${showCheckboxes ? `onclick="toggleSelect(${item.id})"` : ""}>
           <div class="item-top">
-            ${showCheckboxes ? `<input type="checkbox" class="item-checkbox" ${isSelected ? "checked" : ""} onclick="toggleSelect(${item.id})" />` : ""}
+            ${showCheckboxes ? `<input type="checkbox" class="item-checkbox" ${isSelected ? "checked" : ""} onclick="event.stopPropagation(); toggleSelect(${item.id})" />` : ""}
             <div style="flex:1">
               <div class="item-name">${item.name}</div>
               <div class="item-meta">
                 <span class="badge"><i class="${CAT_ICON[item.cat] || "fas fa-question"}"></i> ${CATS[item.cat] || item.cat}</span>
-                ${item.barcode ? `<span style="font-size:11px;color:var(--text3);margin-left:6px">🔳 ${item.barcode}</span>` : ""}
-                ${formattedPrice ? `<span style="font-size:11px;color:var(--text3);margin-left:6px">💰 ${formattedPrice}</span>` : ""}
-                ${item.store ? `<span style="font-size:11px;color:var(--text3);margin-left:6px">🏪 ${item.store}</span>` : ""}
-                ${item.location ? `<span style="font-size:11px;color:var(--text3);margin-left:6px">📍 ${item.location}</span>` : ""}
+                ${item.barcode ? `<span style="font-size:11px;color:var(--text3);margin-left:6px"><i class="fas fa-barcode"></i> ${item.barcode}</span>` : ""}
+                ${formattedPrice ? `<span style="font-size:11px;color:var(--text3);margin-left:6px"><i class="fas fa-euro-sign"></i> ${formattedPrice}</span>` : ""}
+                ${item.store ? `<span style="font-size:11px;color:var(--text3);margin-left:6px"><i class="fas fa-store"></i> ${item.store}</span>` : ""}
+                ${item.location ? `<span style="font-size:11px;color:var(--text3);margin-left:6px"><i class="fas fa-map-marker-alt"></i> ${item.location}</span>` : ""}
               </div>
             </div>
             ${ei ? `<span class="expiry-badge ${ei.cls}">${ei.label}</span>` : ""}
-            <button class="btn-icon" onclick="openEdit(${item.id})">✎</button>
+            <button class="btn-icon" onclick="event.stopPropagation(); openEdit(${item.id})"><i class="fas fa-edit"></i></button>
           </div>
           <div class="item-bottom">
             <div class="qty-ctrl">
-              <button class="qty-btn" onclick="changeQty(${item.id},-1)">−</button>
+              <button class="qty-btn" onclick="event.stopPropagation(); changeQty(${item.id},-1)">−</button>
               <span class="qty-val">${item.qty}</span>
               <span class="qty-unit">${item.unit}</span>
-              <button class="qty-btn" onclick="changeQty(${item.id},1)">+</button>
+              <button class="qty-btn" onclick="event.stopPropagation(); changeQty(${item.id},1)">+</button>
             </div>
             <div style="font-size:12px;color:var(--text2)">${item.expiry ? "MHD: " + fmtDate(item.expiry) : ""}</div>
           </div>
@@ -1115,15 +1130,17 @@
           .join("");
 
         // Bulk actions
-        if (selectedItems.length > 0) {
-          document.getElementById("bulk-container").innerHTML = `
-            <div class="bulk-actions">
-              <span>${selectedItems.length} ausgewählt</span>
-              <button onclick="selectAll()">Alle auswählen</button>
-              <button onclick="openBulkModal()">Bearbeiten</button>
-              <button onclick="clearSelection()">Abbrechen</button>
-            </div>
-          `;
+        if (showCheckboxes) {
+          const selectedCount = selectedItems.length;
+          let content = `<div class="bulk-actions">
+            <span>${selectedCount} ausgewählt</span>
+            <button onclick="selectAll()">Alle auswählen</button>`;
+          if (selectedCount > 0) {
+            content += `<button onclick="openBulkModal()">Bearbeiten</button>`;
+          }
+          content += `<button onclick="clearSelection()">Abbrechen</button>
+            </div>`;
+          document.getElementById("bulk-container").innerHTML = content;
         } else {
           document.getElementById("bulk-container").innerHTML = "";
         }
@@ -1140,7 +1157,7 @@
       function cycleSort() {
         sortMode = sortMode === "expiry" ? "name" : sortMode === "name" ? "created" : "expiry";
         const labels = { expiry: "Ablauf", name: "Name", created: "neuste" };
-        document.getElementById("sort-label").textContent = labels[sortMode];
+        document.getElementById("btn-sort").innerHTML = '<i class="fas fa-sort" style="margin-right: 5px;"></i> ' + labels[sortMode];
         document.getElementById("btn-sort").title = "Sortiert nach " + labels[sortMode];
         render();
       }
@@ -1356,7 +1373,7 @@
         }
         const sa = document.getElementById("scan-area");
         sa.style.display = "block";
-        document.getElementById("btn-scan-toggle").textContent = "⏹ Scanner stoppen";
+        document.getElementById("btn-scan-toggle").innerHTML = '<i class="fas fa-stop"></i> Scanner stoppen';
         document.getElementById("scan-result").classList.remove("show");
         scannerActive = true;
 
@@ -1401,7 +1418,7 @@
           video.load();
         }
         document.getElementById("scan-area").style.display = "none";
-        document.getElementById("btn-scan-toggle").innerHTML = "<span>📷</span> Barcode scannen";
+        document.getElementById("btn-scan-toggle").innerHTML = '<i class="fas fa-camera"></i> Barcode scannen';
       }
 
       async function handleBarcode(barcode) {
