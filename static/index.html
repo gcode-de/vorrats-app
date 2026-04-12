@@ -621,7 +621,10 @@
         </div>
         <div class="field">
           <label>Lagerplatz</label>
-          <input id="f-location" type="text" placeholder="z.B. Regal A, Schrank Küche" />
+          <select id="f-location">
+            <option value="">-- Auswählen oder neu --</option>
+          </select>
+          <input id="f-location-new" type="text" placeholder="Neuer Lagerplatz" style="margin-top: 4px; display: none" />
         </div>
 
         <button class="btn-primary" id="modal-submit" onclick="submitModal()">Speichern</button>
@@ -705,6 +708,31 @@
         select.appendChild(newOption);
         select.onchange = () => {
           const newInput = document.getElementById("f-store-new");
+          if (select.value === "neu") {
+            newInput.style.display = "block";
+            newInput.focus();
+          } else {
+            newInput.style.display = "none";
+            newInput.value = "";
+          }
+        };
+      }
+      async function fetchLocations() {
+        const locations = await fetch(`/api/locations`).then((r) => r.json());
+        const select = document.getElementById("f-location");
+        select.innerHTML = '<option value="">-- Auswählen oder neu --</option>';
+        locations.forEach((location) => {
+          const option = document.createElement("option");
+          option.value = location;
+          option.textContent = location;
+          select.appendChild(option);
+        });
+        const newOption = document.createElement("option");
+        newOption.value = "neu";
+        newOption.textContent = "Neu hinzufügen...";
+        select.appendChild(newOption);
+        select.onchange = () => {
+          const newInput = document.getElementById("f-location-new");
           if (select.value === "neu") {
             newInput.style.display = "block";
             newInput.focus();
@@ -918,8 +946,10 @@
         document.getElementById("f-store").value = "";
         document.getElementById("f-cat-new").style.display = "none";
         document.getElementById("f-store-new").style.display = "none";
+        document.getElementById("f-location-new").style.display = "none";
         document.getElementById("modal-delete").style.display = "none";
         fetchStores();
+        fetchLocations();
         document.getElementById("modal-overlay").classList.add("open");
       }
 
@@ -934,11 +964,37 @@
         document.getElementById("f-cat").value = item.cat;
         document.getElementById("f-expiry").value = item.expiry || "";
         document.getElementById("f-price").value = item.price ? item.price.toString().replace(".", ",") : "";
-        document.getElementById("f-location").value = item.location || "";
-        document.getElementById("f-store").value = item.store || "";
         document.getElementById("f-cat-new").style.display = "none";
         document.getElementById("f-store-new").style.display = "none";
-        fetchStores();
+        document.getElementById("f-location-new").style.display = "none";
+        fetchStores().then(() => {
+          const storeSelect = document.getElementById("f-store");
+          const storeValue = item.store || "";
+          const options = Array.from(storeSelect.options).map(o => o.value);
+          if (storeValue && options.includes(storeValue)) {
+            storeSelect.value = storeValue;
+          } else if (storeValue) {
+            storeSelect.value = "neu";
+            document.getElementById("f-store-new").value = storeValue;
+            document.getElementById("f-store-new").style.display = "block";
+          } else {
+            storeSelect.value = "";
+          }
+        });
+        fetchLocations().then(() => {
+          const locationSelect = document.getElementById("f-location");
+          const locationValue = item.location || "";
+          const options = Array.from(locationSelect.options).map(o => o.value);
+          if (locationValue && options.includes(locationValue)) {
+            locationSelect.value = locationValue;
+          } else if (locationValue) {
+            locationSelect.value = "neu";
+            document.getElementById("f-location-new").value = locationValue;
+            document.getElementById("f-location-new").style.display = "block";
+          } else {
+            locationSelect.value = "";
+          }
+        });
         document.getElementById("modal-delete").style.display = "block";
         document.getElementById("modal-overlay").classList.add("open");
         stopScanner();
@@ -958,6 +1014,10 @@
         if (storeValue === "neu") {
           storeValue = document.getElementById("f-store-new").value.trim();
         }
+        let locationValue = document.getElementById("f-location").value;
+        if (locationValue === "neu") {
+          locationValue = document.getElementById("f-location-new").value.trim();
+        }
         const data = {
           name: document.getElementById("f-name").value.trim(),
           qty: parseInt(document.getElementById("f-qty").value) || 1,
@@ -966,7 +1026,7 @@
           expiry: document.getElementById("f-expiry").value || null,
           price: parseFloat(document.getElementById("f-price").value.replace(",", ".")) || null,
           store: storeValue || null,
-          location: document.getElementById("f-location").value.trim() || null,
+          location: locationValue || null,
         };
         if (!data.name) return;
         (async () => {

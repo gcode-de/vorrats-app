@@ -291,6 +291,15 @@ def list_stores(request: Request):
     con.close()
     return [row["store"] for row in rows]
 
+@app.get("/api/locations")
+def list_locations(request: Request):
+    user = validate_user(request)
+    init_db(user)
+    con = get_db(user)
+    rows = con.execute("SELECT DISTINCT location FROM items WHERE location IS NOT NULL ORDER BY location").fetchall()
+    con.close()
+    return [row["location"] for row in rows]
+
 @app.post("/api/items", status_code=201)
 def create_item(item: ItemCreate, request: Request):
     user = validate_user(request)
