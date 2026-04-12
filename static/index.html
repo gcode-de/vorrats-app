@@ -143,14 +143,39 @@
         padding: 10px 16px;
         background: var(--bg);
       }
+      .search-input-container {
+        position: relative;
+      }
       .search-bar input {
         width: 100%;
-        padding: 9px 12px;
+        padding: 9px 32px 9px 12px;
         border: 1px solid var(--border);
         border-radius: var(--radius-sm);
         background: var(--bg2);
         color: var(--text);
         font-size: 14px;
+      }
+      .clear-search {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        color: var(--text3);
+        font-size: 16px;
+        cursor: pointer;
+        padding: 2px;
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .clear-search:hover {
+        background: var(--border);
+        color: var(--text);
       }
 
       /* Item list */
@@ -507,7 +532,21 @@
       <button class="tab" data-tab="expiry">⚠ Ablauf</button>
     </div>
 
-    <div class="search-bar"><input id="search" placeholder="Suche…" oninput="render()" /></div>
+    <div class="search-bar">
+      <div class="search-input-container">
+        <input id="search" placeholder="Suche…" oninput="render()" />
+        <button
+          class="clear-search"
+          onclick="
+            document.getElementById('search').value = '';
+            render();
+          "
+          title="Suche leeren"
+        >
+          ×
+        </button>
+      </div>
+    </div>
     <div id="fifo-banner"></div>
     <div class="list" id="list"></div>
 
