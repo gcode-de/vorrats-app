@@ -1173,17 +1173,20 @@
         document.getElementById("f-name").value = "";
         document.getElementById("f-qty").value = "1";
         document.getElementById("f-unit").value = "Stk";
-        document.getElementById("f-cat").value = "food";
+        const categoryFilter = ["food", "house", "hygiene"].includes(activeTab) ? activeTab : "food";
+        document.getElementById("f-cat").value = categoryFilter;
         document.getElementById("f-expiry").value = "";
         document.getElementById("f-price").value = "";
-        document.getElementById("f-location").value = "";
         document.getElementById("f-store").value = "";
         document.getElementById("f-cat-new").style.display = "none";
         document.getElementById("f-store-new").style.display = "none";
         document.getElementById("f-location-new").style.display = "none";
         document.getElementById("modal-delete").style.display = "none";
         fetchStores();
-        fetchLocations();
+        fetchLocations().then(() => {
+          const locationFilter = document.getElementById("location-filter").value;
+          document.getElementById("f-location").value = locationFilter;
+        });
         document.getElementById("modal-overlay").classList.add("open");
       }
 
