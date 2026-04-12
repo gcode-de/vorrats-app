@@ -191,6 +191,32 @@
         border-radius: var(--radius);
         padding: 12px 14px;
       }
+      .item-card.selected {
+        border-color: var(--teal);
+        background: var(--teal-light);
+      }
+      .item-checkbox {
+        width: 20px;
+        height: 20px;
+        margin-top: 2px;
+        accent-color: var(--teal);
+      }
+      .bulk-actions {
+        background: var(--bg2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 12px 14px;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-top: 8px;
+      }
+      .bulk-actions button {
+        padding: 6px 12px;
+        border: none;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+      }
       .item-top {
         display: flex;
         align-items: flex-start;
@@ -517,6 +543,7 @@
     <div class="header">
       <h1>🥫 Vorrat <span id="user-name"></span></h1>
       <div class="header-actions">
+        <button class="btn-icon" id="btn-select" title="Mehrfachauswahl" onclick="toggleSelectMode()">✅</button>
         <button class="btn-icon" id="btn-sort" title="Sortierung">⇅</button>
         <button class="btn-icon" id="btn-logout" title="User wechseln" onclick="logout()">🚪</button>
       </div>
@@ -632,6 +659,30 @@
       </div>
     </div>
 
+    <div class="overlay" id="bulk-modal-overlay">
+      <div class="modal" id="bulk-modal">
+        <div class="modal-title">
+          <span>Bulk-Bearbeitung</span>
+          <button class="modal-close" onclick="closeBulkModal()">✕</button>
+        </div>
+        <div class="field">
+          <label>Geschäft</label>
+          <select id="b-store">
+            <option value="">-- Keine Änderung --</option>
+          </select>
+          <input id="b-store-new" type="text" placeholder="Neues Geschäft" style="margin-top: 4px; display: none" />
+        </div>
+        <div class="field">
+          <label>Lagerplatz</label>
+          <select id="b-location">
+            <option value="">-- Keine Änderung --</option>
+          </select>
+          <input id="b-location-new" type="text" placeholder="Neuer Lagerplatz" style="margin-top: 4px; display: none" />
+        </div>
+        <button class="btn-primary" onclick="submitBulkModal()">Anwenden</button>
+      </div>
+    </div>
+
     <!-- Loading spinner -->
     <div class="spinner-overlay" id="spinner-overlay">
       <div class="spinner"></div>
@@ -648,11 +699,15 @@
       }
       const user = getCookie("vorrat_user");
       let items = [];
+      let selectedItems = [];
       let activeTab = "all";
       let sortMode = "expiry";
       let editId = null;
       let scanner = null;
       let scannerActive = false;
+      let showCheckboxes = false;
+      let lastSelected = null;
+      let currentList = [];
 
       const CATS = { food: "Lebensmittel", house: "Haushalt", hygiene: "Hygiene" };
       const CAT_ICON = { food: "fas fa-utensils", house: "fas fa-home", hygiene: "fas fa-pump-soap" };
@@ -751,6 +806,64 @@
             newInput.value = "";
           }
         };
+      }
+      function toggleSelect(id) {
+        const event = window.event;
+        const index = currentList.findIndex((i) => i.id === id);
+        if (event && event.shiftKey && lastSelected !== null) {
+          const lastIndex = currentList.findIndex((i) => i.id === lastSelected);
+          const start = Math.min(index, lastIndex);
+          const end = Math.max(index, lastIndex);
+          for (let i = start; i <= end; i++) {
+            if (!selectedItems.includes(currentList[i].id)) {
+              selectedItems.push(currentList[i].id);
+            }
+          }
+        } else {
+          if (selectedItems.includes(id)) {
+            selectedItems = selectedItems.filter((i) => i !== id);
+          } else {
+            selectedItems.push(id);
+          }
+        }
+        lastSelected = id;
+        render();
+      }
+      function clearSelection() {
+        selectedItems = [];
+        showCheckboxes = false;
+        render();
+      }
+      function selectAll() {
+        selectedItems = currentList.map((i) => i.id);
+        render();
+      }
+      function toggleSelectMode() {
+        showCheckboxes = !showCheckboxes;
+        if (!showCheckboxes) {
+          selectedItems = [];
+        }
+        render();
+      }
+      function bulkUpdate(store, location) {
+        if (!selectedItems.length) return;
+        fetch("/api/items/bulk-update", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ item_ids: selectedItems, store: store || null, location: location || null }),
+        }).then(() => {
+          // Optimistisch UI aktualisieren
+          selectedItems.forEach((id) => {
+            const item = items.find((i) => i.id === id);
+            if (item) {
+              if (store !== null) item.store = store;
+              if (location !== null) item.location = location;
+            }
+          });
+          selectedItems = [];
+          showCheckboxes = false;
+          render();
+        });
       }
       async function createItem(data) {
         showSpinner();
@@ -882,6 +995,8 @@
         document.getElementById("fifo-banner").innerHTML =
           activeTab === "expiry" ? '<div class="fifo-banner">FIFO: Zuerst das Produkt oben verbrauchen — es läuft als nächstes ab.</div>' : "";
 
+        currentList = list;
+
         // List
         if (!list.length) {
           document.getElementById("list").innerHTML = '<div class="empty">Keine Produkte gefunden</div>';
@@ -892,8 +1007,10 @@
           .map((item) => {
             const ei = expiryInfo(item.expiry);
             const formattedPrice = item.price ? new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(item.price) : null;
-            return `<div class="item-card">
+            const isSelected = selectedItems.includes(item.id);
+            return `<div class="item-card ${isSelected ? "selected" : ""}">
           <div class="item-top">
+            ${showCheckboxes ? `<input type="checkbox" class="item-checkbox" ${isSelected ? "checked" : ""} onclick="toggleSelect(${item.id})" />` : ""}
             <div style="flex:1">
               <div class="item-name">${item.name}</div>
               <div class="item-meta">
@@ -919,6 +1036,18 @@
         </div>`;
           })
           .join("");
+
+        // Bulk actions
+        if (selectedItems.length > 0) {
+          document.getElementById("list").innerHTML += `
+            <div class="bulk-actions">
+              <span>${selectedItems.length} ausgewählt</span>
+              <button onclick="selectAll()">Alle auswählen</button>
+              <button onclick="openBulkModal()">Bearbeiten</button>
+              <button onclick="clearSelection()">Abbrechen</button>
+            </div>
+          `;
+        }
       }
 
       // ---------------------------------------------------------------------------
@@ -980,7 +1109,7 @@
         fetchStores().then(() => {
           const storeSelect = document.getElementById("f-store");
           const storeValue = item.store || "";
-          const options = Array.from(storeSelect.options).map(o => o.value);
+          const options = Array.from(storeSelect.options).map((o) => o.value);
           if (storeValue && options.includes(storeValue)) {
             storeSelect.value = storeValue;
           } else if (storeValue) {
@@ -994,7 +1123,7 @@
         fetchLocations().then(() => {
           const locationSelect = document.getElementById("f-location");
           const locationValue = item.location || "";
-          const options = Array.from(locationSelect.options).map(o => o.value);
+          const options = Array.from(locationSelect.options).map((o) => o.value);
           if (locationValue && options.includes(locationValue)) {
             locationSelect.value = locationValue;
           } else if (locationValue) {
@@ -1013,6 +1142,87 @@
       function closeModal() {
         document.getElementById("modal-overlay").classList.remove("open");
         stopScanner();
+      }
+
+      function openBulkModal() {
+        fetchStores().then(() => {
+          const storeSelect = document.getElementById("b-store");
+          storeSelect.innerHTML = '<option value="">-- Keine Änderung --</option>';
+          const stores = Array.from(document.getElementById("f-store").options)
+            .slice(1)
+            .map((o) => o.value)
+            .filter((v) => v && v !== "neu");
+          stores.forEach((store) => {
+            const option = document.createElement("option");
+            option.value = store;
+            option.textContent = store;
+            storeSelect.appendChild(option);
+          });
+          const newOption = document.createElement("option");
+          newOption.value = "neu";
+          newOption.textContent = "Neu hinzufügen...";
+          storeSelect.appendChild(newOption);
+          storeSelect.onchange = () => {
+            const newInput = document.getElementById("b-store-new");
+            if (storeSelect.value === "neu") {
+              newInput.style.display = "block";
+              newInput.focus();
+            } else {
+              newInput.style.display = "none";
+              newInput.value = "";
+            }
+          };
+        });
+        fetchLocations().then(() => {
+          const locationSelect = document.getElementById("b-location");
+          locationSelect.innerHTML = '<option value="">-- Keine Änderung --</option>';
+          const locations = Array.from(document.getElementById("f-location").options)
+            .slice(1)
+            .map((o) => o.value)
+            .filter((v) => v && v !== "neu");
+          locations.forEach((location) => {
+            const option = document.createElement("option");
+            option.value = location;
+            option.textContent = location;
+            locationSelect.appendChild(option);
+          });
+          const newOption = document.createElement("option");
+          newOption.value = "neu";
+          newOption.textContent = "Neu hinzufügen...";
+          locationSelect.appendChild(newOption);
+          locationSelect.onchange = () => {
+            const newInput = document.getElementById("b-location-new");
+            if (locationSelect.value === "neu") {
+              newInput.style.display = "block";
+              newInput.focus();
+            } else {
+              newInput.style.display = "none";
+              newInput.value = "";
+            }
+          };
+        });
+        document.getElementById("bulk-modal-overlay").classList.add("open");
+      }
+
+      function closeBulkModal() {
+        document.getElementById("bulk-modal-overlay").classList.remove("open");
+      }
+
+      function submitBulkModal() {
+        let storeValue = document.getElementById("b-store").value;
+        if (storeValue === "neu") {
+          storeValue = document.getElementById("b-store-new").value.trim();
+        } else if (storeValue === "") {
+          storeValue = null;
+        }
+        let locationValue = document.getElementById("b-location").value;
+        if (locationValue === "neu") {
+          locationValue = document.getElementById("b-location-new").value.trim();
+        } else if (locationValue === "") {
+          locationValue = null;
+        }
+        bulkUpdate(storeValue, locationValue);
+        closeBulkModal();
       }
 
       function submitModal() {

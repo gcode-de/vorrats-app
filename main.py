@@ -318,6 +318,32 @@ def create_item(item: ItemCreate, request: Request):
     con.close()
     return row_to_dict(row)
 
+@app.post("/api/items/bulk-update")
+def bulk_update_items(body: dict, request: Request):
+    user = validate_user(request)
+    init_db(user)
+    con = get_db(user)
+    item_ids = body.get("item_ids", [])
+    store = body.get("store")
+    location = body.get("location")
+    if not item_ids:
+        con.close()
+        raise HTTPException(400, "No item_ids provided")
+    updates = {}
+    if store is not None:
+        updates["store"] = store
+    if location is not None:
+        updates["location"] = location
+    if not updates:
+        con.close()
+        raise HTTPException(400, "No fields to update")
+    sets = ", ".join(f"{k}=?" for k in updates)
+    placeholders = ", ".join("?" for _ in item_ids)
+    con.execute(f"UPDATE items SET {sets} WHERE id IN ({placeholders})", (*updates.values(), *item_ids))
+    con.commit()
+    con.close()
+    return {"updated": len(item_ids)}
+
 @app.put("/api/items/{item_id}")
 def update_item(item_id: int, item: ItemUpdate, request: Request):
     user = validate_user(request)
@@ -335,6 +361,32 @@ def update_item(item_id: int, item: ItemUpdate, request: Request):
     row = con.execute("SELECT * FROM items WHERE id=?", (item_id,)).fetchone()
     con.close()
     return row_to_dict(row)
+
+@app.post("/api/bulk-update")
+def bulk_update_items(body: dict, request: Request):
+    user = validate_user(request)
+    init_db(user)
+    con = get_db(user)
+    item_ids = body.get("item_ids", [])
+    store = body.get("store")
+    location = body.get("location")
+    if not item_ids:
+        con.close()
+        raise HTTPException(400, "No item_ids provided")
+    updates = {}
+    if store is not None:
+        updates["store"] = store
+    if location is not None:
+        updates["location"] = location
+    if not updates:
+        con.close()
+        raise HTTPException(400, "No fields to update")
+    sets = ", ".join(f"{k}=?" for k in updates)
+    placeholders = ", ".join("?" for _ in item_ids)
+    con.execute(f"UPDATE items SET {sets} WHERE id IN ({placeholders})", (*updates.values(), *item_ids))
+    con.commit()
+    con.close()
+    return {"updated": len(item_ids)}
 
 @app.post("/api/items/{item_id}/qty")
 def change_qty(item_id: int, body: QtyChange, request: Request):
