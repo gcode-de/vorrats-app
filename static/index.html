@@ -163,12 +163,12 @@
         background: none;
         border: none;
         color: var(--text3);
-        font-size: 16px;
+        font-size: 18px;
         cursor: pointer;
-        padding: 2px;
+        padding: 4px;
         border-radius: 50%;
-        width: 20px;
-        height: 20px;
+        width: 28px;
+        height: 28px;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -534,14 +534,24 @@
 
     <div class="search-bar">
       <div class="search-input-container">
-        <input id="search" placeholder="Suche…" oninput="render()" />
+        <input
+          id="search"
+          placeholder="Suche…"
+          oninput="
+            render();
+            toggleClearIcon();
+          "
+        />
         <button
           class="clear-search"
+          id="clear-search-btn"
           onclick="
             document.getElementById('search').value = '';
             render();
+            toggleClearIcon();
           "
           title="Suche leeren"
+          style="display: none"
         >
           ×
         </button>
@@ -724,7 +734,7 @@
       }
       async function changeQty(id, delta) {
         // Optimistic update
-        const item = items.find(i => i.id === id);
+        const item = items.find((i) => i.id === id);
         if (!item) return;
         const oldQty = item.qty;
         item.qty += delta;
@@ -737,29 +747,29 @@
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ delta }),
           });
-          if (!response.ok) throw new Error('Failed to update quantity');
+          if (!response.ok) throw new Error("Failed to update quantity");
         } catch (error) {
           // Revert on error
           item.qty = oldQty;
           render();
-          alert('Fehler beim Aktualisieren der Menge: ' + error.message);
+          alert("Fehler beim Aktualisieren der Menge: " + error.message);
         }
       }
       async function delItem(id) {
         // Optimistic update
-        const index = items.findIndex(i => i.id === id);
+        const index = items.findIndex((i) => i.id === id);
         if (index === -1) return;
         const deletedItem = items.splice(index, 1)[0];
         render();
 
         try {
           const response = await fetch(`/api/items/${id}`, { method: "DELETE" });
-          if (!response.ok) throw new Error('Failed to delete item');
+          if (!response.ok) throw new Error("Failed to delete item");
         } catch (error) {
           // Revert on error
           items.splice(index, 0, deletedItem);
           render();
-          alert('Fehler beim Löschen des Artikels: ' + error.message);
+          alert("Fehler beim Löschen des Artikels: " + error.message);
         }
       }
 
@@ -1014,10 +1024,16 @@
         if (scanner) {
           try {
             scanner.reset();
+            scanner.stopAsyncDecode();
           } catch (e) {}
         }
         scanner = null;
         scannerActive = false;
+        const video = document.getElementById("scan-video");
+        if (video) {
+          video.srcObject = null;
+          video.load();
+        }
         document.getElementById("scan-area").style.display = "none";
         document.getElementById("btn-scan-toggle").innerHTML = "<span>📷</span> Barcode scannen";
       }
@@ -1040,6 +1056,12 @@
       // ---------------------------------------------------------------------------
       // Logout
       // ---------------------------------------------------------------------------
+      function toggleClearIcon() {
+        const searchInput = document.getElementById("search");
+        const clearBtn = document.getElementById("clear-search-btn");
+        clearBtn.style.display = searchInput.value.trim() ? "flex" : "none";
+      }
+
       function logout() {
         document.cookie = "vorrat_user=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
         window.location.reload();
