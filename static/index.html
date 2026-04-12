@@ -721,6 +721,16 @@
         const locations = await fetch(`/api/locations`).then((r) => r.json());
         const select = document.getElementById("f-location");
         select.innerHTML = '<option value="">-- Auswählen oder neu --</option>';
+        // Add default locations
+        const defaultLocations = ["Küche", "Kühlschrank", "Regal"];
+        defaultLocations.forEach((location) => {
+          if (!locations.includes(location)) {
+            const option = document.createElement("option");
+            option.value = location;
+            option.textContent = location;
+            select.appendChild(option);
+          }
+        });
         locations.forEach((location) => {
           const option = document.createElement("option");
           option.value = location;
