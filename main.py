@@ -134,6 +134,7 @@ class ItemCreate(BaseModel):
     barcode: Optional[str] = None
     price: Optional[float] = None
     store: Optional[str] = None
+    location: Optional[str] = None
 
 class ItemUpdate(BaseModel):
     name: Optional[str] = None
@@ -144,6 +145,7 @@ class ItemUpdate(BaseModel):
     barcode: Optional[str] = None
     price: Optional[float] = None
     store: Optional[str] = None
+    location: Optional[str] = None
 
 class QtyChange(BaseModel):
     delta: int

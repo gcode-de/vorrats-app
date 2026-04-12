@@ -619,6 +619,10 @@
             <input id="f-store-new" type="text" placeholder="Neues Geschäft" style="margin-top: 4px; display: none" />
           </div>
         </div>
+        <div class="field">
+          <label>Lagerplatz</label>
+          <input id="f-location" type="text" placeholder="z.B. Regal A, Schrank Küche" />
+        </div>
 
         <button class="btn-primary" id="modal-submit" onclick="submitModal()">Speichern</button>
         <button class="btn-secondary" id="modal-delete" style="display: none; color: var(--red)" onclick="deleteItem()">Löschen</button>
@@ -859,6 +863,7 @@
                 ${item.barcode ? `<span style="font-size:11px;color:var(--text3);margin-left:6px">🔳 ${item.barcode}</span>` : ""}
                 ${formattedPrice ? `<span style="font-size:11px;color:var(--text3);margin-left:6px">💰 ${formattedPrice}</span>` : ""}
                 ${item.store ? `<span style="font-size:11px;color:var(--text3);margin-left:6px">🏪 ${item.store}</span>` : ""}
+                ${item.location ? `<span style="font-size:11px;color:var(--text3);margin-left:6px">📍 ${item.location}</span>` : ""}
               </div>
             </div>
             ${ei ? `<span class="expiry-badge ${ei.cls}">${ei.label}</span>` : ""}
@@ -909,6 +914,7 @@
         document.getElementById("f-cat").value = "food";
         document.getElementById("f-expiry").value = "";
         document.getElementById("f-price").value = "";
+        document.getElementById("f-location").value = "";
         document.getElementById("f-store").value = "";
         document.getElementById("f-cat-new").style.display = "none";
         document.getElementById("f-store-new").style.display = "none";
@@ -928,6 +934,7 @@
         document.getElementById("f-cat").value = item.cat;
         document.getElementById("f-expiry").value = item.expiry || "";
         document.getElementById("f-price").value = item.price ? item.price.toString().replace(".", ",") : "";
+        document.getElementById("f-location").value = item.location || "";
         document.getElementById("f-store").value = item.store || "";
         document.getElementById("f-cat-new").style.display = "none";
         document.getElementById("f-store-new").style.display = "none";
@@ -959,6 +966,7 @@
           expiry: document.getElementById("f-expiry").value || null,
           price: parseFloat(document.getElementById("f-price").value.replace(",", ".")) || null,
           store: storeValue || null,
+          location: document.getElementById("f-location").value.trim() || null,
         };
         if (!data.name) return;
         (async () => {
