@@ -118,6 +118,10 @@ def init_db(user: str):
         con.execute("ALTER TABLE items ADD COLUMN store TEXT")
     except sqlite3.OperationalError:
         pass  # Column already exists
+    try:
+        con.execute("ALTER TABLE items ADD COLUMN location TEXT")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
     con.commit()
     con.close()
 
