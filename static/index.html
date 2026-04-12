@@ -143,6 +143,20 @@
         padding: 10px 16px;
         background: var(--bg);
       }
+      .location-filter {
+        padding: 8px 16px;
+        background: var(--bg);
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .location-filter select {
+        padding: 4px 8px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        background: var(--bg);
+      }
       .search-input-container {
         position: relative;
       }
@@ -202,7 +216,7 @@
         accent-color: var(--teal);
       }
       .bulk-actions {
-        background: var(--bg2);
+        background: var(--bg);
         border: 1px solid var(--border);
         border-radius: var(--radius);
         padding: 12px 14px;
@@ -216,6 +230,18 @@
         border: none;
         border-radius: var(--radius-sm);
         cursor: pointer;
+      }
+      #bulk-container {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 1000;
+        background: var(--bg);
+        border-top: 1px solid var(--border);
+        padding: 12px 16px;
+        display: flex;
+        justify-content: center;
       }
       .item-top {
         display: flex;
@@ -544,7 +570,8 @@
       <h1>🥫 Vorrat <span id="user-name"></span></h1>
       <div class="header-actions">
         <button class="btn-icon" id="btn-select" title="Mehrfachauswahl" onclick="toggleSelectMode()">✅</button>
-        <button class="btn-icon" id="btn-sort" title="Sortierung">⇅</button>
+        <button class="btn-icon" id="btn-sort" title="Sortierung" onclick="cycleSort()">⇅</button>
+        <span id="sort-label" style="font-size: 12px; color: var(--text2); margin-left: 4px">Ablauf</span>
         <button class="btn-icon" id="btn-logout" title="User wechseln" onclick="logout()">🚪</button>
       </div>
     </div>
@@ -584,8 +611,16 @@
         </button>
       </div>
     </div>
+
+    <div class="location-filter">
+      <label>Lagerplatz filtern:</label>
+      <select id="location-filter" onchange="render()">
+        <option value="">Alle</option>
+      </select>
+    </div>
     <div id="fifo-banner"></div>
     <div class="list" id="list"></div>
+    <div id="bulk-container"></div>
 
     <button class="fab" id="fab">＋</button>
 
@@ -708,6 +743,7 @@
       let showCheckboxes = false;
       let lastSelected = null;
       let currentList = [];
+      let locations = [];
 
       const CATS = { food: "Lebensmittel", house: "Haushalt", hygiene: "Hygiene" };
       const CAT_ICON = { food: "fas fa-utensils", house: "fas fa-home", hygiene: "fas fa-pump-soap" };
@@ -729,10 +765,18 @@
       // API calls
       // ---------------------------------------------------------------------------
       async function fetchItems() {
+        console.log("fetchItems called");
         showSpinner();
         try {
+          console.log("fetching /api/items");
           items = await fetch(`/api/items`).then((r) => r.json());
+          console.log("items fetched:", items);
+          locations = await fetch(`/api/locations`).then((r) => r.json());
+          console.log("locations fetched:", locations);
+          updateLocationFilter();
           render();
+        } catch (error) {
+          console.error("Error in fetchItems:", error);
         } finally {
           hideSpinner();
         }
@@ -829,10 +873,17 @@
         lastSelected = id;
         render();
       }
-      function clearSelection() {
-        selectedItems = [];
-        showCheckboxes = false;
-        render();
+      function updateLocationFilter() {
+        const select = document.getElementById("location-filter");
+        const currentValue = select.value;
+        select.innerHTML = '<option value="">Alle</option>';
+        locations.forEach((location) => {
+          const option = document.createElement("option");
+          option.value = location;
+          option.textContent = location;
+          select.appendChild(option);
+        });
+        select.value = currentValue;
       }
       function selectAll() {
         selectedItems = currentList.map((i) => i.id);
@@ -963,16 +1014,21 @@
               return Math.floor((new Date(i.expiry) - new Date()) / 864e5) <= 90;
             })
             .sort((a, b) => a.expiry.localeCompare(b.expiry));
-        } else {
-          if (sortMode === "expiry")
-            list.sort((a, b) => {
-              if (a.expiry && b.expiry) return a.expiry.localeCompare(b.expiry);
-              if (a.expiry) return -1;
-              if (b.expiry) return 1;
-              return a.name.localeCompare(b.name);
-            });
-          else list.sort((a, b) => a.name.localeCompare(b.name));
         }
+
+        const locationFilter = document.getElementById("location-filter").value;
+        if (locationFilter) {
+          list = list.filter((i) => i.location === locationFilter);
+        }
+        if (sortMode === "expiry")
+          list.sort((a, b) => {
+            if (a.expiry && b.expiry) return a.expiry.localeCompare(b.expiry);
+            if (a.expiry) return -1;
+            if (b.expiry) return 1;
+            return a.name.localeCompare(b.name);
+          });
+        else if (sortMode === "created") list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        else list.sort((a, b) => a.name.localeCompare(b.name));
 
         // Stats
         const soon = items.filter((i) => {
@@ -1039,7 +1095,7 @@
 
         // Bulk actions
         if (selectedItems.length > 0) {
-          document.getElementById("list").innerHTML += `
+          document.getElementById("bulk-container").innerHTML = `
             <div class="bulk-actions">
               <span>${selectedItems.length} ausgewählt</span>
               <button onclick="selectAll()">Alle auswählen</button>
@@ -1047,6 +1103,8 @@
               <button onclick="clearSelection()">Abbrechen</button>
             </div>
           `;
+        } else {
+          document.getElementById("bulk-container").innerHTML = "";
         }
       }
 
@@ -1061,11 +1119,13 @@
           render();
         };
       });
-      document.getElementById("btn-sort").onclick = () => {
-        sortMode = sortMode === "expiry" ? "name" : "expiry";
-        document.getElementById("btn-sort").title = sortMode === "expiry" ? "Sortiert nach Ablauf" : "Sortiert nach Name";
+      function cycleSort() {
+        sortMode = sortMode === "expiry" ? "name" : sortMode === "name" ? "created" : "expiry";
+        const labels = { expiry: "Ablauf", name: "Name", created: "Erstellungsdatum" };
+        document.getElementById("sort-label").textContent = labels[sortMode];
+        document.getElementById("btn-sort").title = "Sortiert nach " + labels[sortMode];
         render();
-      };
+      }
 
       // ---------------------------------------------------------------------------
       // Modal
