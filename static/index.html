@@ -723,25 +723,43 @@
         }
       }
       async function changeQty(id, delta) {
-        showSpinner();
+        // Optimistic update
+        const item = items.find(i => i.id === id);
+        if (!item) return;
+        const oldQty = item.qty;
+        item.qty += delta;
+        if (item.qty < 0) item.qty = 0; // Prevent negative qty
+        render();
+
         try {
-          await fetch(`/api/items/${id}/qty`, {
+          const response = await fetch(`/api/items/${id}/qty`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ delta }),
           });
-          fetchItems();
-        } finally {
-          hideSpinner();
+          if (!response.ok) throw new Error('Failed to update quantity');
+        } catch (error) {
+          // Revert on error
+          item.qty = oldQty;
+          render();
+          alert('Fehler beim Aktualisieren der Menge: ' + error.message);
         }
       }
       async function delItem(id) {
-        showSpinner();
+        // Optimistic update
+        const index = items.findIndex(i => i.id === id);
+        if (index === -1) return;
+        const deletedItem = items.splice(index, 1)[0];
+        render();
+
         try {
-          await fetch(`/api/items/${id}`, { method: "DELETE" });
-          fetchItems();
-        } finally {
-          hideSpinner();
+          const response = await fetch(`/api/items/${id}`, { method: "DELETE" });
+          if (!response.ok) throw new Error('Failed to delete item');
+        } catch (error) {
+          // Revert on error
+          items.splice(index, 0, deletedItem);
+          render();
+          alert('Fehler beim Löschen des Artikels: ' + error.message);
         }
       }
 
