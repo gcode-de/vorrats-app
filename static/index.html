@@ -162,12 +162,34 @@
       }
       .search-bar input {
         width: 100%;
-        padding: 9px 32px 9px 12px;
+        padding: 9px 60px 9px 40px;
         border: 1px solid var(--border);
         border-radius: var(--radius-sm);
         background: var(--bg2);
         color: var(--text);
         font-size: 14px;
+      }
+      .scan-search {
+        position: absolute;
+        left: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        color: var(--text3);
+        font-size: 16px;
+        cursor: pointer;
+        padding: 4px;
+        border-radius: 50%;
+        width: 28px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .scan-search:hover {
+        background: var(--border);
+        color: var(--text);
       }
       .clear-search {
         position: absolute;
@@ -501,9 +523,10 @@
         background: #000;
         border-radius: var(--radius-sm);
         overflow: hidden;
-        margin-bottom: 14px;
+        margin: 0 auto 14px auto;
         aspect-ratio: 4/3;
         max-height: 260px;
+        max-width: 400px;
       }
       .scan-area video {
         width: 100%;
@@ -524,6 +547,23 @@
         border: 2px solid var(--teal);
         border-radius: 8px;
         box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.4);
+      }
+      .scan-stop {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: rgba(0, 0, 0, 0.5);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        font-size: 18px;
+        cursor: pointer;
+        pointer-events: auto;
+      }
+      .scan-stop:hover {
+        background: rgba(0, 0, 0, 0.7);
       }
       .scan-result {
         background: var(--teal-light);
@@ -633,6 +673,14 @@
           "
         />
         <button
+          class="scan-search"
+          id="scan-search-btn"
+          onclick="searchByScan()"
+          title="Nach Barcode suchen"
+        >
+          <i class="fas fa-camera"></i>
+        </button>
+        <button
           class="clear-search"
           id="clear-search-btn"
           onclick="
@@ -645,6 +693,14 @@
         >
           ×
         </button>
+      </div>
+    </div>
+
+    <div id="scan-area" class="scan-area" style="display: none">
+      <video id="scan-video" playsinline muted autoplay></video>
+      <div class="scan-overlay">
+        <div class="scan-frame"></div>
+        <button class="scan-stop" onclick="stopScanner()" title="Scanner stoppen"><i class="fas fa-times"></i></button>
       </div>
     </div>
 
@@ -664,10 +720,6 @@
 
         <!-- Barcode scan button -->
         <button class="btn-scan" id="btn-scan-toggle" onclick="toggleScanner()"><i class="fas fa-camera"></i> Barcode scannen</button>
-        <div id="scan-area" class="scan-area" style="display: none">
-          <video id="scan-video" playsinline muted autoplay></video>
-          <div class="scan-overlay"><div class="scan-frame"></div></div>
-        </div>
         <div class="scan-result" id="scan-result"></div>
 
         <div class="field">
@@ -1457,6 +1509,54 @@
         } else {
           res.textContent = "Barcode: " + barcode + " — Name bitte manuell eintragen";
           document.getElementById("f-name").focus();
+        }
+      }
+
+      async function searchByScan() {
+        const sa = document.getElementById("scan-area");
+        sa.style.display = "block";
+        document.getElementById("btn-scan-toggle").innerHTML = '<i class="fas fa-stop"></i> Scanner stoppen';
+        document.getElementById("scan-result").classList.remove("show");
+        scannerActive = true;
+
+        try {
+          if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+            throw new Error("Kamera-Zugriff erfordert HTTPS oder localhost. Stelle sicher, dass die App über HTTPS läuft.");
+          }
+          const codeReader = new ZXing.BrowserMultiFormatReader();
+          scanner = codeReader;
+
+          // Verwende facingMode für stabile Kamera-Auswahl
+          const hints = {
+            video: {
+              facingMode: "environment",
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            }
+          };
+
+          await codeReader.decodeFromVideoDevice(undefined, "scan-video", async (result, err) => {
+            if (result) {
+              const barcode = result.getText();
+              stopScanner();
+              // Hole den Namen von der API und setze ihn ins Suchfeld
+              try {
+                const data = await fetch(`/api/barcode/${barcode}`).then((r) => r.json());
+                const searchTerm = data.found && data.name ? data.name : barcode;
+                document.getElementById("search").value = searchTerm;
+                render();
+                toggleClearIcon();
+              } catch (e) {
+                // Fallback: Setze EAN
+                document.getElementById("search").value = barcode;
+                render();
+                toggleClearIcon();
+              }
+            }
+          }, hints);
+        } catch (e) {
+          alert("Kamera konnte nicht gestartet werden: " + e.message);
+          stopScanner();
         }
       }
 
