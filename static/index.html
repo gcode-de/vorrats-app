@@ -8,6 +8,7 @@
     <title>Vorratsverwaltung</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
     <script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
+    <script src="https://unpkg.com/fuse.js@7.0.0/dist/fuse.min.js"></script>
     <style>
       * {
         box-sizing: border-box;
@@ -672,12 +673,7 @@
             toggleClearIcon();
           "
         />
-        <button
-          class="scan-search"
-          id="scan-search-btn"
-          onclick="searchByScan()"
-          title="Nach Barcode suchen"
-        >
+        <button class="scan-search" id="scan-search-btn" onclick="searchByScan()" title="Nach Barcode suchen">
           <i class="fas fa-camera"></i>
         </button>
         <button
@@ -1090,7 +1086,18 @@
       function render() {
         document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active"));
         const q = document.getElementById("search").value.toLowerCase();
-        let list = [...items].filter((i) => i.name.toLowerCase().includes(q));
+        let list;
+        if (q) {
+          const fuse = new Fuse(items, {
+            keys: ["name"],
+            threshold: 0.4,
+            includeScore: true,
+          });
+          const results = fuse.search(q);
+          list = results.map((r) => r.item);
+        } else {
+          list = [...items];
+        }
 
         if (activeTab === "food") list = list.filter((i) => i.cat === "food");
         else if (activeTab === "house") list = list.filter((i) => i.cat === "house");
@@ -1531,29 +1538,34 @@
             video: {
               facingMode: "environment",
               width: { ideal: 1280 },
-              height: { ideal: 720 }
-            }
+              height: { ideal: 720 },
+            },
           };
 
-          await codeReader.decodeFromVideoDevice(undefined, "scan-video", async (result, err) => {
-            if (result) {
-              const barcode = result.getText();
-              stopScanner();
-              // Hole den Namen von der API und setze ihn ins Suchfeld
-              try {
-                const data = await fetch(`/api/barcode/${barcode}`).then((r) => r.json());
-                const searchTerm = data.found && data.name ? data.name : barcode;
-                document.getElementById("search").value = searchTerm;
-                render();
-                toggleClearIcon();
-              } catch (e) {
-                // Fallback: Setze EAN
-                document.getElementById("search").value = barcode;
-                render();
-                toggleClearIcon();
+          await codeReader.decodeFromVideoDevice(
+            undefined,
+            "scan-video",
+            async (result, err) => {
+              if (result) {
+                const barcode = result.getText();
+                stopScanner();
+                // Hole den Namen von der API und setze ihn ins Suchfeld
+                try {
+                  const data = await fetch(`/api/barcode/${barcode}`).then((r) => r.json());
+                  const searchTerm = data.found && data.name ? data.name : barcode;
+                  document.getElementById("search").value = searchTerm;
+                  render();
+                  toggleClearIcon();
+                } catch (e) {
+                  // Fallback: Setze EAN
+                  document.getElementById("search").value = barcode;
+                  render();
+                  toggleClearIcon();
+                }
               }
-            }
-          }, hints);
+            },
+            hints,
+          );
         } catch (e) {
           alert("Kamera konnte nicht gestartet werden: " + e.message);
           stopScanner();

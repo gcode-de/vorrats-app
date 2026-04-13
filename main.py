@@ -4,7 +4,8 @@ from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 from typing import Optional
 import sqlite3, os, httpx, asyncio
-from datetime import date, datetime
+from datetime import date
+import datetime
 import hashlib
 
 DB_PATH = None  # Wird dynamisch gesetzt
@@ -169,7 +170,7 @@ def row_to_dict(row):
     return dict(zip(row.keys(), row))
 
 def now():
-    return datetime.utcnow().isoformat()
+    return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 # ---------------------------------------------------------------------------
 # Routes
