@@ -1386,20 +1386,28 @@
           }
           const codeReader = new ZXing.BrowserMultiFormatReader();
           scanner = codeReader;
-          const devices = await navigator.mediaDevices.enumerateDevices();
-          const videoDevices = devices.filter((d) => d.kind === "videoinput");
-          const backCam =
-            videoDevices.find((d) => d.label.toLowerCase().includes("back") || d.label.toLowerCase().includes("rear")) ||
-            videoDevices[videoDevices.length - 1];
-          const deviceId = backCam ? backCam.deviceId : undefined;
 
-          await codeReader.decodeFromVideoDevice(deviceId, "scan-video", async (result, err) => {
-            if (result) {
-              const barcode = result.getText();
-              stopScanner();
-              await handleBarcode(barcode);
-            }
-          });
+          // Verwende facingMode für stabile Kamera-Auswahl (ohne deviceId für Test)
+          const hints = {
+            video: {
+              facingMode: "environment",
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
+          };
+
+          await codeReader.decodeFromVideoDevice(
+            undefined,
+            "scan-video",
+            async (result, err) => {
+              if (result) {
+                const barcode = result.getText();
+                stopScanner();
+                await handleBarcode(barcode);
+              }
+            },
+            hints,
+          );
         } catch (e) {
           alert("Kamera konnte nicht gestartet werden: " + e.message);
           stopScanner();
@@ -1416,12 +1424,25 @@
         scanner = null;
         scannerActive = false;
         const video = document.getElementById("scan-video");
-        if (video) {
+        if (video && video.srcObject) {
+          const stream = video.srcObject;
+          const tracks = stream.getTracks();
+          tracks.forEach((track) => track.stop());
           video.srcObject = null;
           video.load();
         }
         document.getElementById("scan-area").style.display = "none";
         document.getElementById("btn-scan-toggle").innerHTML = '<i class="fas fa-camera"></i> Barcode scannen';
+
+        // Reset camera state to prevent zoom issues on next start
+        setTimeout(() => {
+          navigator.mediaDevices
+            .getUserMedia({ video: { facingMode: "environment" } })
+            .then((stream) => {
+              stream.getTracks().forEach((track) => track.stop());
+            })
+            .catch(() => {});
+        }, 500);
       }
 
       async function handleBarcode(barcode) {
