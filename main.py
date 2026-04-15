@@ -7,6 +7,8 @@ import sqlite3, os, httpx, asyncio
 from datetime import date
 import datetime
 import hashlib
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 DB_PATH = None  # Wird dynamisch gesetzt
 OPENFOODFACTS_URL = "https://world.openfoodfacts.org/api/v0/product/{barcode}.json"
@@ -110,6 +112,14 @@ def init_db(user: str):
             FOREIGN KEY(item_id) REFERENCES items(id)
         )
     """)
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS settings (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user       TEXT NOT NULL UNIQUE,
+            telegram_token TEXT,
+            telegram_chat_id TEXT
+        )
+    """)
     # Add missing columns if they don't exist
     try:
         con.execute("ALTER TABLE items ADD COLUMN price REAL")
@@ -159,6 +169,10 @@ class QtyChange(BaseModel):
 class LoginData(BaseModel):
     user: str
     password: str
+
+class SettingsUpdate(BaseModel):
+    telegram_token: Optional[str] = None
+    telegram_chat_id: Optional[str] = None
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -472,6 +486,103 @@ async def lookup_barcode(barcode: str):
         }
     except Exception:
         return {"found": False}
+
+@app.get("/api/settings")
+def get_settings(request: Request):
+    user = validate_user(request)
+    init_db(user)
+    con = get_db(user)
+    row = con.execute("SELECT telegram_token, telegram_chat_id FROM settings WHERE user = ?", (user,)).fetchone()
+    con.close()
+    if row:
+        return {"telegram_token": row["telegram_token"], "telegram_chat_id": row["telegram_chat_id"]}
+    return {"telegram_token": None, "telegram_chat_id": None}
+
+@app.put("/api/settings")
+def update_settings(settings: SettingsUpdate, request: Request):
+    user = validate_user(request)
+    init_db(user)
+    con = get_db(user)
+    con.execute("""
+        INSERT INTO settings (user, telegram_token, telegram_chat_id)
+        VALUES (?, ?, ?)
+        ON CONFLICT(user) DO UPDATE SET
+            telegram_token = excluded.telegram_token,
+            telegram_chat_id = excluded.telegram_chat_id
+    """, (user, settings.telegram_token, settings.telegram_chat_id))
+    con.commit()
+    con.close()
+    return {"success": True}
+
+@app.post("/api/test_telegram")
+async def test_telegram(request: Request):
+    user = validate_user(request)
+    init_db(user)
+    con = get_db(user)
+    row = con.execute("SELECT telegram_token, telegram_chat_id FROM settings WHERE user = ?", (user,)).fetchone()
+    con.close()
+    if not row or not row["telegram_token"] or not row["telegram_chat_id"]:
+        raise HTTPException(400, "Telegram settings not configured")
+    await send_weekly_report_for_user(user)
+    return {"success": True}
+
+# ---------------------------------------------------------------------------
+# Telegram and Scheduler
+# ---------------------------------------------------------------------------
+
+async def send_weekly_report():
+    # Get all users with telegram settings
+    users_db = sqlite3.connect(get_users_db_path())
+    users_db.row_factory = sqlite3.Row
+    users = users_db.execute("SELECT username FROM users").fetchall()
+    users_db.close()
+    for user_row in users:
+        user = user_row["username"]
+        con = get_db(user)
+        row = con.execute("SELECT telegram_token, telegram_chat_id FROM settings WHERE user = ?", (user,)).fetchone()
+        con.close()
+        if row and row["telegram_token"] and row["telegram_chat_id"]:
+            await send_weekly_report_for_user(user)
+
+async def send_weekly_report_for_user(user: str):
+    init_db(user)
+    con = get_db(user)
+    monday = con.execute("""
+        SELECT datetime('now', 'start of day', '-' || ((strftime('%w', 'now') + 6) % 7) || ' days') AS monday
+    """).fetchone()["monday"]
+    rows = con.execute("""
+        SELECT i.name, SUM(ABS(se.delta)) as total_taken, i.unit
+        FROM items i
+        JOIN stock_events se ON i.id = se.item_id
+        WHERE se.delta < 0 AND se.created_at >= ?
+        GROUP BY i.id
+        ORDER BY total_taken DESC
+    """, (monday,)).fetchall()
+    con.close()
+    
+    if not rows:
+        message = "🥫Vorrats-App:\nKeine Entnahmen diese Woche."
+    else:
+        message = "🥫Vorrats-App\nDiese Woche entnommen:\n"
+        for row in rows:
+            message += f"- {row['name']}: {row['total_taken']} {row['unit']}\n"
+    
+    # Get settings
+    con = get_db(user)
+    row = con.execute("SELECT telegram_token, telegram_chat_id FROM settings WHERE user = ?", (user,)).fetchone()
+    con.close()
+    if not row or not row["telegram_token"] or not row["telegram_chat_id"]:
+        return
+    
+    token = row["telegram_token"]
+    chat_id = row["telegram_chat_id"]
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    async with httpx.AsyncClient() as client:
+        await client.post(url, json={"chat_id": chat_id, "text": message})
+
+scheduler = AsyncIOScheduler()
+scheduler.add_job(send_weekly_report, CronTrigger(day_of_week=6, hour=12))  # 6=Sonntag, 12 Uhr
+scheduler.start()
 
 # ---------------------------------------------------------------------------
 # Serve frontend

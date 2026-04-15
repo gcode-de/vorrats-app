@@ -368,8 +368,17 @@
         background: var(--bg2);
       }
 
+      .info-link {
+        color: var(--blue);
+        text-decoration: none;
+      }
+      .info-link:hover {
+        text-decoration: underline;
+      }
+
       #btn-select,
-      #btn-logout {
+      #btn-logout,
+      #btn-settings {
         min-width: 40px;
       }
 
@@ -636,6 +645,7 @@
     <div class="header">
       <h1><i class="fas fa-archive" style="margin-right: 8px"></i> Vorrat <span id="user-name"></span></h1>
       <div class="header-actions">
+        <button class="btn-icon" id="btn-settings" title="Einstellungen" onclick="openSettings()"><i class="fas fa-cog"></i></button>
         <button class="btn-icon" id="btn-select" title="Mehrfachauswahl" onclick="toggleSelectMode()"><i class="fas fa-check-square"></i></button>
         <button class="btn-icon" id="btn-sort" title="Sortiert nach Ablauf" onclick="cycleSort()">
           <i class="fas fa-sort" style="margin-right: 5px"></i> Ablauf
@@ -794,6 +804,33 @@
           <input id="b-location-new" type="text" placeholder="Neuer Lagerplatz" style="margin-top: 4px; display: none" />
         </div>
         <button class="btn-primary" onclick="submitBulkModal()">Anwenden</button>
+      </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="overlay" id="settings-modal-overlay">
+      <div class="modal" id="settings-modal">
+        <div class="modal-title">
+          <span>Benachrichtigung</span>
+          <button class="modal-close" onclick="closeSettings()"><i class="fas fa-times"></i></button>
+        </div>
+        <p style="font-size: 14px; color: var(--text2); margin-bottom: 16px">
+          Info über entnommenen Artikel sonntags um 12 Uhr über Telegram.
+          <br /><a href="https://core.telegram.org/bots#creating-a-new-bot" target="_blank" class="info-link">Bot erstellen</a> |
+          <a href="https://stackoverflow.com/questions/32423837/telegram-bot-how-to-get-a-group-chat-id" target="_blank" class="info-link"
+            >Chat-ID ermitteln</a
+          >
+        </p>
+        <div class="field">
+          <label>Telegram Bot-Token</label>
+          <input id="s-telegram-token" type="text" placeholder="z.B. 123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11" />
+        </div>
+        <div class="field">
+          <label>Telegram Chat-ID</label>
+          <input id="s-telegram-chat-id" type="text" placeholder="z.B. 123456789" />
+        </div>
+        <button class="btn-primary" onclick="saveSettings()">Speichern</button>
+        <button class="btn-secondary" onclick="testTelegram()">Test-Nachricht senden</button>
       </div>
     </div>
 
@@ -1619,6 +1656,35 @@
           });
       }
       fetchItems();
+      // Settings functions
+      async function openSettings() {
+        const settings = await fetch("/api/settings").then((r) => r.json());
+        document.getElementById("s-telegram-token").value = settings.telegram_token || "";
+        document.getElementById("s-telegram-chat-id").value = settings.telegram_chat_id || "";
+        document.getElementById("settings-modal-overlay").classList.add("open");
+      }
+      function closeSettings() {
+        document.getElementById("settings-modal-overlay").classList.remove("open");
+      }
+      async function saveSettings() {
+        const token = document.getElementById("s-telegram-token").value.trim();
+        const chatId = document.getElementById("s-telegram-chat-id").value.trim();
+        await fetch("/api/settings", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ telegram_token: token || null, telegram_chat_id: chatId || null }),
+        });
+        closeSettings();
+        alert("Einstellungen gespeichert!");
+      }
+      async function testTelegram() {
+        try {
+          await fetch("/api/test_telegram", { method: "POST" });
+          alert("Test-Nachricht gesendet!");
+        } catch (e) {
+          alert("Fehler: " + e.message);
+        }
+      }
       // Init category select
       document.getElementById("f-cat").onchange = () => {
         const newInput = document.getElementById("f-cat-new");
