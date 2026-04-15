@@ -429,6 +429,26 @@ def item_history(item_id: int, request: Request):
     con.close()
     return [row_to_dict(r) for r in rows]
 
+@app.get("/api/recently_taken")
+def get_recently_taken(request: Request):
+    user = validate_user(request)
+    init_db(user)
+    con = get_db(user)
+    # Berechne den Montag der aktuellen Woche (00:00 Uhr)
+    monday = con.execute("""
+        SELECT datetime('now', 'start of day', '-' || ((strftime('%w', 'now') + 6) % 7) || ' days') AS monday
+    """).fetchone()["monday"]
+    rows = con.execute("""
+        SELECT i.*, MAX(se.created_at) as last_taken
+        FROM items i
+        JOIN stock_events se ON i.id = se.item_id
+        WHERE se.delta < 0 AND se.created_at >= ?
+        GROUP BY i.id
+        ORDER BY last_taken DESC
+    """, (monday,)).fetchall()
+    con.close()
+    return [row_to_dict(r) for r in rows]
+
 # ---------------------------------------------------------------------------
 # Barcode lookup – OpenFoodFacts
 # ---------------------------------------------------------------------------

@@ -653,6 +653,7 @@
           <option value="food">Lebensmittel</option>
           <option value="house">Haushalt</option>
           <option value="hygiene">Hygiene</option>
+          <option value="recently_taken">Kürzlich entnommen</option>
           <option value="expiry"><i class="fas fa-exclamation-triangle"></i> Ablauf</option>
         </select>
       </div>
@@ -812,6 +813,7 @@
       }
       const user = getCookie("vorrat_user");
       let items = [];
+      let recentlyTakenItems = [];
       let selectedItems = [];
       let activeTab = "all";
       let sortMode = "expiry";
@@ -857,6 +859,15 @@
           console.error("Error in fetchItems:", error);
         } finally {
           hideSpinner();
+        }
+      }
+
+      async function fetchRecentlyTaken() {
+        try {
+          recentlyTakenItems = await fetch(`/api/recently_taken`).then((r) => r.json());
+        } catch (error) {
+          console.error("Error fetching recently taken:", error);
+          recentlyTakenItems = [];
         }
       }
       async function fetchStores() {
@@ -1037,6 +1048,9 @@
             body: JSON.stringify({ delta }),
           });
           if (!response.ok) throw new Error("Failed to update quantity");
+          if (delta < 0 && activeTab === "recently_taken") {
+            await fetchRecentlyTaken();
+          }
         } catch (error) {
           // Revert on error
           item.qty = oldQty;
@@ -1102,6 +1116,7 @@
         if (activeTab === "food") list = list.filter((i) => i.cat === "food");
         else if (activeTab === "house") list = list.filter((i) => i.cat === "house");
         else if (activeTab === "hygiene") list = list.filter((i) => i.cat === "hygiene");
+        else if (activeTab === "recently_taken") list = [...recentlyTakenItems];
         else if (activeTab === "expiry") {
           list = list
             .filter((i) => {
@@ -1123,7 +1138,7 @@
             return a.name.localeCompare(b.name);
           });
         else if (sortMode === "created") list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-        else list.sort((a, b) => a.name.localeCompare(b.name));
+        else if (activeTab !== "recently_taken") list.sort((a, b) => a.name.localeCompare(b.name));
 
         // Stats
         const soon = items.filter((i) => {
@@ -1210,7 +1225,11 @@
       // ---------------------------------------------------------------------------
       function changeCategory(tab) {
         activeTab = tab;
-        render();
+        if (tab === "recently_taken") {
+          fetchRecentlyTaken().then(() => render());
+        } else {
+          render();
+        }
       }
       // No tabs to handle
       function cycleSort() {
