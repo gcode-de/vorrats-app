@@ -533,15 +533,20 @@
         background: #000;
         border-radius: var(--radius-sm);
         overflow: hidden;
-        margin: 0 auto 14px auto;
+        margin: 0 auto;
         aspect-ratio: 4/3;
-        max-height: 260px;
-        max-width: 400px;
+        max-height: 200px;
+        max-width: 300px;
+        z-index: 1000;
       }
       .scan-area video {
         width: 100%;
         height: 100%;
-        object-fit: cover;
+        object-fit: contain;
+      }
+      /* Modal scanner takes full width */
+      #scan-area {
+        max-width: 100% !important;
       }
       .scan-overlay {
         position: absolute;
@@ -703,17 +708,17 @@
       </div>
     </div>
 
-    <div id="scan-area" class="scan-area" style="display: none">
-      <video id="scan-video" playsinline muted autoplay></video>
+    <!-- Global scan area for search functionality -->
+    <div id="global-scan-area" class="scan-area" style="display: none;">
+      <video id="global-scan-video" playsinline muted autoplay></video>
       <div class="scan-overlay">
         <div class="scan-frame"></div>
-        <button class="scan-stop" onclick="stopScanner()" title="Scanner stoppen"><i class="fas fa-times"></i></button>
+        <button class="scan-stop" onclick="stopGlobalScanner()" title="Scanner stoppen"><i class="fas fa-times"></i></button>
       </div>
     </div>
 
     <div id="fifo-banner"></div>
     <div class="list" id="list"></div>
-    <div id="bulk-container"></div>
 
     <button class="fab" id="fab"><i class="fas fa-plus"></i></button>
 
@@ -727,6 +732,13 @@
 
         <!-- Barcode scan button -->
         <button class="btn-scan" id="btn-scan-toggle" onclick="toggleScanner()"><i class="fas fa-camera"></i> Barcode scannen</button>
+        <div id="scan-area" class="scan-area" style="display: none">
+          <video id="scan-video" playsinline muted autoplay></video>
+          <div class="scan-overlay">
+            <div class="scan-frame"></div>
+            <button class="scan-stop" onclick="stopScanner()" title="Scanner stoppen"><i class="fas fa-times"></i></button>
+          </div>
+        </div>
         <div class="scan-result" id="scan-result"></div>
 
         <div class="field">
@@ -1283,6 +1295,8 @@
       document.getElementById("fab").onclick = openAdd;
 
       function openAdd() {
+        // Stoppe SearchByScan-Modus wenn aktiv
+        stopGlobalScanner();
         editId = null;
         document.getElementById("modal-title-text").textContent = "Produkt hinzufügen";
         document.getElementById("f-name").value = "";
@@ -1306,6 +1320,8 @@
       }
 
       function openEdit(id) {
+        // Stoppe SearchByScan-Modus wenn aktiv
+        stopGlobalScanner();
         const item = items.find((i) => i.id === id);
         if (!item) return;
         editId = id;
@@ -1358,6 +1374,8 @@
       }
 
       function openBulkModal() {
+        // Stoppe SearchByScan-Modus wenn aktiv
+        stopGlobalScanner();
         fetchStores().then(() => {
           const storeSelect = document.getElementById("b-store");
           storeSelect.innerHTML = '<option value="">-- Keine Änderung --</option>';
@@ -1576,10 +1594,10 @@
       }
 
       async function searchByScan() {
-        const sa = document.getElementById("scan-area");
+        // Schließe Modal wenn offen
+        closeModal();
+        const sa = document.getElementById("global-scan-area");
         sa.style.display = "block";
-        document.getElementById("btn-scan-toggle").innerHTML = '<i class="fas fa-stop"></i> Scanner stoppen';
-        document.getElementById("scan-result").classList.remove("show");
         scannerActive = true;
 
         try {
@@ -1600,11 +1618,11 @@
 
           await codeReader.decodeFromVideoDevice(
             undefined,
-            "scan-video",
+            "global-scan-video",
             async (result, err) => {
               if (result) {
                 const barcode = result.getText();
-                stopScanner();
+                stopGlobalScanner();
                 // Hole den Namen von der API und setze ihn ins Suchfeld
                 try {
                   const data = await fetch(`/api/barcode/${barcode}`).then((r) => r.json());
@@ -1624,8 +1642,17 @@
           );
         } catch (e) {
           alert("Kamera konnte nicht gestartet werden: " + e.message);
-          stopScanner();
+          stopGlobalScanner();
         }
+      }
+
+      function stopGlobalScanner() {
+        if (scanner) {
+          scanner.reset();
+          scanner = null;
+        }
+        scannerActive = false;
+        document.getElementById("global-scan-area").style.display = "none";
       }
 
       // ---------------------------------------------------------------------------
@@ -1658,6 +1685,8 @@
       fetchItems();
       // Settings functions
       async function openSettings() {
+        // Stoppe SearchByScan-Modus wenn aktiv
+        stopGlobalScanner();
         const settings = await fetch("/api/settings").then((r) => r.json());
         document.getElementById("s-telegram-token").value = settings.telegram_token || "";
         document.getElementById("s-telegram-chat-id").value = settings.telegram_chat_id || "";

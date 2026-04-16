@@ -9,11 +9,23 @@ import datetime
 import hashlib
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from contextlib import asynccontextmanager
 
 DB_PATH = None  # Wird dynamisch gesetzt
 OPENFOODFACTS_URL = "https://world.openfoodfacts.org/api/v0/product/{barcode}.json"
 
-app = FastAPI(title="Vorratsverwaltung")
+scheduler = AsyncIOScheduler()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    scheduler.add_job(send_weekly_report, CronTrigger(day_of_week=6, hour=12))  # 6=Sonntag, 12 Uhr
+    scheduler.start()
+    yield
+    # Shutdown
+    scheduler.shutdown()
+
+app = FastAPI(title="Vorratsverwaltung", lifespan=lifespan)
 
 # ---------------------------------------------------------------------------
 # User Management
@@ -579,10 +591,6 @@ async def send_weekly_report_for_user(user: str):
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     async with httpx.AsyncClient() as client:
         await client.post(url, json={"chat_id": chat_id, "text": message})
-
-scheduler = AsyncIOScheduler()
-scheduler.add_job(send_weekly_report, CronTrigger(day_of_week=6, hour=12))  # 6=Sonntag, 12 Uhr
-scheduler.start()
 
 # ---------------------------------------------------------------------------
 # Serve frontend
