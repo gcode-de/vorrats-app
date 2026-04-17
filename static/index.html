@@ -709,7 +709,7 @@
     </div>
 
     <!-- Global scan area for search functionality -->
-    <div id="global-scan-area" class="scan-area" style="display: none;">
+    <div id="global-scan-area" class="scan-area" style="display: none">
       <video id="global-scan-video" playsinline muted autoplay></video>
       <div class="scan-overlay">
         <div class="scan-frame"></div>
@@ -1199,9 +1199,8 @@
           items.reduce((s, i) => s + (i.price ? i.price * i.qty : 0), 0),
         );
         document.getElementById("stats-bar").innerHTML = `
-        <div class="stat-pill"><span>${items.length}</span> Produkte</div>
-        <div class="stat-pill"><span>${items.reduce((s, i) => s + i.qty, 0)}</span> Einheiten</div>
-        <div class="stat-pill"><span>${totalValue}</span> Gesamtwert</div>
+        <div class="stat-pill"><span>${items.length}</span> Produkte - <span>${items.reduce((s, i) => s + i.qty, 0)}</span> Einheiten</div>
+        <div class="stat-pill"><span>${totalValue}</span> ges.</div>
         ${soon.length ? `<div class="stat-pill warn"><span>${soon.length}</span> bald ablaufend</div>` : ""}
         ${exp.length ? `<div class="stat-pill danger"><span>${exp.length}</span> abgelaufen</div>` : ""}
       `;
