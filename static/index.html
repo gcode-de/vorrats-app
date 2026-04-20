@@ -227,10 +227,31 @@
         border: 1px solid var(--border);
         border-radius: var(--radius);
         padding: 12px 14px;
+        position: relative;
       }
       .item-card.selected {
         border-color: var(--teal);
         background: var(--teal-light);
+      }
+      .swipe-delete-overlay {
+        position: absolute;
+        top: 0;
+        right: 0;
+        height: 100%;
+        background: linear-gradient(to left, var(--red), transparent);
+        width: 0;
+        transition: width 0.1s ease;
+        pointer-events: none;
+        border-radius: var(--radius);
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        color: white;
+        font-weight: bold;
+        padding-right: 10px;
+        font-size: 14px;
+        visibility: hidden;
+        opacity: 0;
       }
       .item-checkbox {
         width: 20px;
@@ -1274,6 +1295,7 @@
             </div>
             <div style="font-size:12px;color:var(--text2)">${item.expiry ? "MHD: " + fmtDate(item.expiry) : ""}</div>
           </div>
+        <div class="swipe-delete-overlay">Löschen</div>
         </div>`;
             })
             .join("");
@@ -1291,12 +1313,31 @@
               startX = e.touches[0].clientX;
               startY = e.touches[0].clientY;
             });
+            card.addEventListener("touchmove", (e) => {
+              if (!isSwiping) return;
+              const currentX = e.touches[0].clientX;
+              const deltaX = startX - currentX;
+              const overlay = card.querySelector(".swipe-delete-overlay");
+              if (deltaX > 0) {
+                overlay.style.width = Math.min(deltaX, card.offsetWidth / 2) + "px";
+                overlay.style.visibility = "visible";
+                overlay.style.opacity = Math.min(deltaX / (card.offsetWidth / 2), 1);
+              } else {
+                overlay.style.width = "0";
+                overlay.style.visibility = "hidden";
+                overlay.style.opacity = "0";
+              }
+            });
             card.addEventListener("touchend", (e) => {
+              const overlay = card.querySelector(".swipe-delete-overlay");
+              overlay.style.width = "0";
+              overlay.style.visibility = "hidden";
+              overlay.style.opacity = "0";
               const endX = e.changedTouches[0].clientX;
               const endY = e.changedTouches[0].clientY;
               const id = parseInt(card.dataset.id);
               const item = items.find((i) => i.id === id);
-              if (startX - endX > 100 && Math.abs(startY - endY) < 50) {
+              if (startX - endX > card.offsetWidth / 2 && Math.abs(startY - endY) < 50) {
                 // Swipe left
                 if (confirm(`Artikel ${item.name} (${item.qty} ${item.unit}) löschen?`)) {
                   delItem(id);
@@ -1313,8 +1354,21 @@
               if (!isSwiping) return;
               const deltaX = startX - e.clientX;
               const deltaY = Math.abs(startY - e.clientY);
-              if (deltaX > 100 && deltaY < 50) {
+              const overlay = card.querySelector(".swipe-delete-overlay");
+              if (deltaX > 0 && deltaY < 50) {
+                overlay.style.width = Math.min(deltaX, card.offsetWidth / 2) + "px";
+                overlay.style.visibility = "visible";
+                overlay.style.opacity = Math.min(deltaX / (card.offsetWidth / 2), 1);
+              } else {
+                overlay.style.width = "0";
+                overlay.style.visibility = "hidden";
+                overlay.style.opacity = "0";
+              }
+              if (deltaX > card.offsetWidth / 2 && deltaY < 50) {
                 isSwiping = false;
+                overlay.style.width = "0";
+                overlay.style.visibility = "hidden";
+                overlay.style.opacity = "0";
                 const id = parseInt(card.dataset.id);
                 const item = items.find((i) => i.id === id);
                 if (confirm(`Artikel ${item.name} (${item.qty} ${item.unit}) löschen?`)) {
@@ -1324,6 +1378,10 @@
             });
             card.addEventListener("mouseup", () => {
               isSwiping = false;
+              const overlay = card.querySelector(".swipe-delete-overlay");
+              overlay.style.width = "0";
+              overlay.style.visibility = "hidden";
+              overlay.style.opacity = "0";
             });
           });
         }
