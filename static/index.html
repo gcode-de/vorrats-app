@@ -240,14 +240,17 @@
         height: 100%;
         background: linear-gradient(to left, var(--red), transparent);
         width: 0;
-        transition: width 0.1s ease;
+        opacity: 0;
+        transition: width 0.3s ease-out, opacity 0.3s ease-out;
         pointer-events: none;
         border-radius: var(--radius);
         display: flex;
         align-items: center;
         justify-content: flex-end;
         color: white;
-        font-weight: bold;
+        font-size: 1.2em;
+        padding-right: 15px;
+      }
         padding-right: 10px;
         font-size: 14px;
         visibility: hidden;
@@ -1295,7 +1298,7 @@
             </div>
             <div style="font-size:12px;color:var(--text2)">${item.expiry ? "MHD: " + fmtDate(item.expiry) : ""}</div>
           </div>
-        <div class="swipe-delete-overlay">Löschen</div>
+        <div class="swipe-delete-overlay"><i class="fas fa-trash"></i></div>
         </div>`;
             })
             .join("");
@@ -1312,6 +1315,7 @@
             card.addEventListener("touchstart", (e) => {
               startX = e.touches[0].clientX;
               startY = e.touches[0].clientY;
+              isSwiping = true;
             });
             card.addEventListener("touchmove", (e) => {
               if (!isSwiping) return;
@@ -1319,7 +1323,7 @@
               const deltaX = startX - currentX;
               const overlay = card.querySelector(".swipe-delete-overlay");
               if (deltaX > 0) {
-                overlay.style.width = Math.min(deltaX, card.offsetWidth / 2) + "px";
+                overlay.style.width = Math.min(deltaX, card.offsetWidth) + "px";
                 overlay.style.visibility = "visible";
                 overlay.style.opacity = Math.min(deltaX / (card.offsetWidth / 2), 1);
               } else {
@@ -1329,6 +1333,7 @@
               }
             });
             card.addEventListener("touchend", (e) => {
+              isSwiping = false;
               const overlay = card.querySelector(".swipe-delete-overlay");
               overlay.style.width = "0";
               overlay.style.visibility = "hidden";
@@ -1356,7 +1361,7 @@
               const deltaY = Math.abs(startY - e.clientY);
               const overlay = card.querySelector(".swipe-delete-overlay");
               if (deltaX > 0 && deltaY < 50) {
-                overlay.style.width = Math.min(deltaX, card.offsetWidth / 2) + "px";
+                overlay.style.width = Math.min(deltaX, card.offsetWidth) + "px";
                 overlay.style.visibility = "visible";
                 overlay.style.opacity = Math.min(deltaX / (card.offsetWidth / 2), 1);
               } else {
