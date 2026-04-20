@@ -100,6 +100,7 @@ def init_db(user: str):
     data_dir = get_data_dir()
     os.makedirs(data_dir, exist_ok=True)
     con = get_db(user)
+    con.execute("PRAGMA foreign_keys = ON;")
     con.execute("""
         CREATE TABLE IF NOT EXISTS items (
             id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -121,6 +122,8 @@ def init_db(user: str):
             delta      INTEGER NOT NULL,
             note       TEXT,
             created_at TEXT NOT NULL,
+            name       TEXT,
+            unit       TEXT,
             FOREIGN KEY(item_id) REFERENCES items(id)
         )
     """)
@@ -143,6 +146,14 @@ def init_db(user: str):
         pass  # Column already exists
     try:
         con.execute("ALTER TABLE items ADD COLUMN location TEXT")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    try:
+        con.execute("ALTER TABLE stock_events ADD COLUMN name TEXT")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    try:
+        con.execute("ALTER TABLE stock_events ADD COLUMN unit TEXT")
     except sqlite3.OperationalError:
         pass  # Column already exists
     con.commit()
@@ -426,8 +437,8 @@ def change_qty(item_id: int, body: QtyChange, request: Request):
         raise HTTPException(404, "Item not found")
     new_qty = max(0, item["qty"] + body.delta)
     con.execute("UPDATE items SET qty=? WHERE id=?", (new_qty, item_id))
-    con.execute("INSERT INTO stock_events (item_id,delta,note,created_at) VALUES (?,?,?,?)",
-                (item_id, body.delta, body.note, now()))
+    con.execute("INSERT INTO stock_events (item_id,delta,note,created_at,name,unit) VALUES (?,?,?,?,?,?)",
+                (item_id, body.delta, body.note, now(), item["name"], item["unit"]))
     con.commit()
     row = con.execute("SELECT * FROM items WHERE id=?", (item_id,)).fetchone()
     con.close()
@@ -438,8 +449,12 @@ def delete_item(item_id: int, request: Request):
     user = validate_user(request)
     init_db(user)
     con = get_db(user)
+    item = con.execute("SELECT * FROM items WHERE id=?", (item_id,)).fetchone()
+    if item:
+        con.execute("INSERT INTO stock_events (item_id,delta,note,created_at,name,unit) VALUES (?,?,?,?,?,?)",
+                    (item_id, -item["qty"], "deleted", now(), item["name"], item["unit"]))
     con.execute("DELETE FROM items WHERE id=?", (item_id,))
-    con.execute("DELETE FROM stock_events WHERE item_id=?", (item_id,))
+    # Keep stock_events
     con.commit()
     con.close()
 
@@ -465,11 +480,13 @@ def get_recently_taken(request: Request):
         SELECT datetime('now', 'start of day', '-' || ((strftime('%w', 'now') + 6) % 7) || ' days') AS monday
     """).fetchone()["monday"]
     rows = con.execute("""
-        SELECT i.*, MAX(se.created_at) as last_taken
-        FROM items i
-        JOIN stock_events se ON i.id = se.item_id
-        WHERE se.delta < 0 AND se.created_at >= ?
-        GROUP BY i.id
+        SELECT COALESCE(i.name, se.name) as name, COALESCE(i.unit, se.unit) as unit, COALESCE(i.cat, 'food') as cat, COALESCE(i.expiry, '') as expiry, COALESCE(i.price, 0) as price, COALESCE(i.store, '') as store, COALESCE(i.location, '') as location, i.barcode, i.created_at, MAX(se.created_at) as last_taken,
+        CASE WHEN SUM(se.delta) < 0 THEN -SUM(se.delta) ELSE 0 END as total_taken
+        FROM stock_events se
+        LEFT JOIN items i ON i.id = se.item_id
+        WHERE se.created_at >= ?
+        GROUP BY se.item_id
+        HAVING SUM(se.delta) < 0
         ORDER BY last_taken DESC
     """, (monday,)).fetchall()
     con.close()
@@ -563,11 +580,14 @@ async def send_weekly_report_for_user(user: str):
         SELECT datetime('now', 'start of day', '-' || ((strftime('%w', 'now') + 6) % 7) || ' days') AS monday
     """).fetchone()["monday"]
     rows = con.execute("""
-        SELECT i.name, SUM(ABS(se.delta)) as total_taken, i.unit
-        FROM items i
-        JOIN stock_events se ON i.id = se.item_id
-        WHERE se.delta < 0 AND se.created_at >= ?
-        GROUP BY i.id
+        SELECT COALESCE(i.name, se.name) as name, 
+        CASE WHEN SUM(se.delta) < 0 THEN -SUM(se.delta) ELSE 0 END as total_taken, 
+        COALESCE(i.unit, se.unit) as unit
+        FROM stock_events se
+        LEFT JOIN items i ON i.id = se.item_id
+        WHERE se.created_at >= ?
+        GROUP BY se.item_id
+        HAVING SUM(se.delta) < 0
         ORDER BY total_taken DESC
     """, (monday,)).fetchall()
     con.close()

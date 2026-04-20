@@ -861,6 +861,10 @@
         return null;
       }
       const user = getCookie("vorrat_user");
+      if (!user) {
+        document.cookie = "vorrat_user=default; path=/; max-age=31536000";
+        window.location.reload();
+      }
       let items = [];
       let recentlyTakenItems = [];
       let selectedItems = [];
@@ -898,9 +902,9 @@
         showSpinner();
         try {
           console.log("fetching /api/items");
-          items = await fetch(`/api/items`).then((r) => r.json());
+          items = await fetch(`/api/items`, { credentials: 'include' }).then((r) => r.json());
           console.log("items fetched:", items);
-          locations = await fetch(`/api/locations`).then((r) => r.json());
+          locations = await fetch(`/api/locations`, { credentials: 'include' }).then((r) => r.json());
           console.log("locations fetched:", locations);
           updateLocationFilter();
           render();
@@ -913,14 +917,14 @@
 
       async function fetchRecentlyTaken() {
         try {
-          recentlyTakenItems = await fetch(`/api/recently_taken`).then((r) => r.json());
+          recentlyTakenItems = await fetch(`/api/recently_taken`, { credentials: 'include' }).then((r) => r.json());
         } catch (error) {
           console.error("Error fetching recently taken:", error);
           recentlyTakenItems = [];
         }
       }
       async function fetchStores() {
-        const stores = await fetch(`/api/stores`).then((r) => r.json());
+        const stores = await fetch(`/api/stores`, { credentials: 'include' }).then((r) => r.json());
         const select = document.getElementById("f-store");
         select.innerHTML = '<option value="">-- Auswählen oder neu --</option>';
         // Add default stores
@@ -955,7 +959,7 @@
         };
       }
       async function fetchLocations() {
-        const locations = await fetch(`/api/locations`).then((r) => r.json());
+        const locations = await fetch(`/api/locations`, { credentials: 'include' }).then((r) => r.json());
         const select = document.getElementById("f-location");
         select.innerHTML = '<option value="">-- Auswählen oder neu --</option>';
         // Add default locations
@@ -1062,7 +1066,7 @@
       async function createItem(data) {
         showSpinner();
         try {
-          await fetch(`/api/items`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+          await fetch(`/api/items`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data), credentials: 'include' });
           fetchItems();
         } finally {
           hideSpinner();
@@ -1075,6 +1079,7 @@
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(data),
+            credentials: 'include',
           });
           fetchItems();
         } finally {
@@ -1095,10 +1100,17 @@
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ delta }),
+            credentials: 'include',
           });
           if (!response.ok) throw new Error("Failed to update quantity");
           if (delta < 0 && activeTab === "recently_taken") {
             await fetchRecentlyTaken();
+          }
+          // Check if qty <= 0, offer to delete
+          if (item.qty <= 0) {
+            if (confirm(`Artikel ${item.name} auf 0 reduziert. Löschen?`)) {
+              delItem(id);
+            }
           }
         } catch (error) {
           // Revert on error
@@ -1115,7 +1127,7 @@
         render();
 
         try {
-          const response = await fetch(`/api/items/${id}`, { method: "DELETE" });
+          const response = await fetch(`/api/items/${id}`, { method: "DELETE", credentials: 'include' });
           if (!response.ok) throw new Error("Failed to delete item");
         } catch (error) {
           // Revert on error
@@ -1222,7 +1234,9 @@
             const ei = expiryInfo(item.expiry);
             const formattedPrice = item.price ? new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(item.price) : null;
             const isSelected = selectedItems.includes(item.id);
-            return `<div class="item-card ${isSelected ? "selected" : ""}" ${showCheckboxes ? `onclick="toggleSelect(${item.id})"` : ""}>
+            const qtyDisplay = activeTab === "recently_taken" ? item.total_taken : item.qty;
+            const unitDisplay = activeTab === "recently_taken" ? item.unit : item.unit;
+            return `<div class="item-card ${isSelected ? "selected" : ""}" ${showCheckboxes ? `onclick="toggleSelect(${item.id})"` : ""} data-id="${item.id}">
           <div class="item-top">
             ${showCheckboxes ? `<input type="checkbox" class="item-checkbox" ${isSelected ? "checked" : ""} onclick="event.stopPropagation(); toggleSelect(${item.id})" />` : ""}
             <div style="flex:1">
@@ -1236,20 +1250,67 @@
               </div>
             </div>
             ${ei ? `<span class="expiry-badge ${ei.cls}">${ei.label}</span>` : ""}
-            <button class="btn-icon" onclick="event.stopPropagation(); openEdit(${item.id})"><i class="fas fa-edit"></i></button>
+            ${activeTab === "recently_taken" ? "" : `<button class="btn-icon" onclick="event.stopPropagation(); openEdit(${item.id})"><i class="fas fa-edit"></i></button>`}
           </div>
           <div class="item-bottom">
             <div class="qty-ctrl">
-              <button class="qty-btn" onclick="event.stopPropagation(); changeQty(${item.id},-1)">−</button>
-              <span class="qty-val">${item.qty}</span>
-              <span class="qty-unit">${item.unit}</span>
-              <button class="qty-btn" onclick="event.stopPropagation(); changeQty(${item.id},1)">+</button>
+              ${activeTab === "recently_taken" ? "" : `<button class="qty-btn" onclick="event.stopPropagation(); changeQty(${item.id},-1)">−</button>`}
+              <span class="qty-val">${qtyDisplay}</span>
+              <span class="qty-unit">${unitDisplay}</span>
+              ${activeTab === "recently_taken" ? "" : `<button class="qty-btn" onclick="event.stopPropagation(); changeQty(${item.id},1)">+</button>`}
             </div>
             <div style="font-size:12px;color:var(--text2)">${item.expiry ? "MHD: " + fmtDate(item.expiry) : ""}</div>
           </div>
         </div>`;
           })
           .join("");
+
+        // Add swipe listeners
+        if (activeTab !== "recently_taken") {
+          document.querySelectorAll(".item-card").forEach((card) => {
+            let startX = 0;
+            let startY = 0;
+            let isSwiping = false;
+            card.addEventListener("touchstart", (e) => {
+              startX = e.touches[0].clientX;
+              startY = e.touches[0].clientY;
+            });
+            card.addEventListener("touchend", (e) => {
+              const endX = e.changedTouches[0].clientX;
+              const endY = e.changedTouches[0].clientY;
+              const id = parseInt(card.dataset.id);
+              const item = items.find((i) => i.id === id);
+              if (startX - endX > 100 && Math.abs(startY - endY) < 50) {
+                // Swipe left
+                if (confirm(`Artikel ${item.name} (${item.qty} ${item.unit}) löschen?`)) {
+                  delItem(id);
+                }
+              }
+            });
+            // For desktop mouse swipe
+            card.addEventListener("mousedown", (e) => {
+              startX = e.clientX;
+              startY = e.clientY;
+              isSwiping = true;
+            });
+            card.addEventListener("mousemove", (e) => {
+              if (!isSwiping) return;
+              const deltaX = startX - e.clientX;
+              const deltaY = Math.abs(startY - e.clientY);
+              if (deltaX > 100 && deltaY < 50) {
+                isSwiping = false;
+                const id = parseInt(card.dataset.id);
+                const item = items.find((i) => i.id === id);
+                if (confirm(`Artikel ${item.name} (${item.qty} ${item.unit}) löschen?`)) {
+                  delItem(id);
+                }
+              }
+            });
+            card.addEventListener("mouseup", () => {
+              isSwiping = false;
+            });
+          });
+        }
 
         // Bulk actions
         if (showCheckboxes) {
@@ -1296,6 +1357,7 @@
       function openAdd() {
         // Stoppe SearchByScan-Modus wenn aktiv
         stopGlobalScanner();
+        stopScanner();
         editId = null;
         document.getElementById("modal-title-text").textContent = "Produkt hinzufügen";
         document.getElementById("f-name").value = "";
@@ -1321,6 +1383,7 @@
       function openEdit(id) {
         // Stoppe SearchByScan-Modus wenn aktiv
         stopGlobalScanner();
+        stopScanner();
         const item = items.find((i) => i.id === id);
         if (!item) return;
         editId = id;
@@ -1487,7 +1550,8 @@
       }
 
       function deleteItem() {
-        if (!confirm("Produkt löschen?")) return;
+        const item = items.find((i) => i.id === editId);
+        if (!confirm(`Artikel ${item.name} (${item.qty} ${item.unit}) löschen?`)) return;
         (async () => {
           await delItem(editId);
           closeModal();
@@ -1582,7 +1646,7 @@
         res.textContent = "Suche Produkt…";
         res.classList.add("show");
 
-        const data = await fetch(`/api/barcode/${barcode}`).then((r) => r.json());
+        const data = await fetch(`/api/barcode/${barcode}`, { credentials: 'include' }).then((r) => r.json());
         if (data.found && data.name) {
           document.getElementById("f-name").value = data.name;
           res.textContent = "✓ Gefunden: " + data.name + (data.brands ? " (" + data.brands + ")" : "");
@@ -1624,7 +1688,7 @@
                 stopGlobalScanner();
                 // Hole den Namen von der API und setze ihn ins Suchfeld
                 try {
-                  const data = await fetch(`/api/barcode/${barcode}`).then((r) => r.json());
+                  const data = await fetch(`/api/barcode/${barcode}`, { credentials: 'include' }).then((r) => r.json());
                   const searchTerm = data.found && data.name ? data.name : barcode;
                   document.getElementById("search").value = searchTerm;
                   render();
@@ -1669,6 +1733,16 @@
       }
 
       // ---------------------------------------------------------------------------
+      // Init
+      // ---------------------------------------------------------------------------
+      async function init() {
+        await fetchItems();
+        await fetchRecentlyTaken();
+        await fetchStores();
+        await fetchLocations();
+        render();
+      }
+      init();
       // Init
       // ---------------------------------------------------------------------------
       if ("serviceWorker" in navigator) {
