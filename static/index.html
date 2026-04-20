@@ -873,6 +873,7 @@
       let editId = null;
       let scanner = null;
       let scannerActive = false;
+      let globalScannerRunning = false;
       let showCheckboxes = false;
       let lastSelected = null;
       let currentList = [];
@@ -1371,8 +1372,7 @@
 
       function openAdd() {
         // Stoppe SearchByScan-Modus wenn aktiv
-        stopGlobalScanner();
-        stopScanner();
+        if (globalScannerRunning) stopGlobalScanner();
         editId = null;
         document.getElementById("modal-title-text").textContent = "Produkt hinzufügen";
         document.getElementById("f-name").value = "";
@@ -1393,12 +1393,12 @@
           document.getElementById("f-location").value = locationFilter;
         });
         document.getElementById("modal-overlay").classList.add("open");
+        document.getElementById("f-name").focus();
       }
 
       function openEdit(id) {
         // Stoppe SearchByScan-Modus wenn aktiv
-        stopGlobalScanner();
-        stopScanner();
+        if (globalScannerRunning) stopGlobalScanner();
         const item = items.find((i) => i.id === id);
         if (!item) return;
         editId = id;
@@ -1442,12 +1442,14 @@
         });
         document.getElementById("modal-delete").style.display = "block";
         document.getElementById("modal-overlay").classList.add("open");
-        stopScanner();
+        document.getElementById("f-name").focus();
       }
 
       function closeModal() {
         document.getElementById("modal-overlay").classList.remove("open");
-        stopScanner();
+        if (scanner) {
+          stopScanner();
+        }
       }
 
       function openBulkModal() {
@@ -1585,6 +1587,7 @@
           stopScanner();
           return;
         }
+        stopGlobalScanner();
         const sa = document.getElementById("scan-area");
         sa.style.display = "block";
         document.getElementById("btn-scan-toggle").innerHTML = '<i class="fas fa-stop"></i> Scanner stoppen';
@@ -1677,6 +1680,7 @@
         const sa = document.getElementById("global-scan-area");
         sa.style.display = "block";
         scannerActive = true;
+        globalScannerRunning = true;
 
         try {
           if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
@@ -1726,10 +1730,22 @@
 
       function stopGlobalScanner() {
         if (scanner) {
-          scanner.reset();
+          try {
+            scanner.reset();
+            scanner.stopAsyncDecode();
+          } catch (e) {}
           scanner = null;
         }
         scannerActive = false;
+        globalScannerRunning = false;
+        const video = document.getElementById("global-scan-video");
+        if (video && video.srcObject) {
+          const stream = video.srcObject;
+          const tracks = stream.getTracks();
+          tracks.forEach((track) => track.stop());
+          video.srcObject = null;
+          video.load();
+        }
         document.getElementById("global-scan-area").style.display = "none";
       }
 
