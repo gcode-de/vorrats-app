@@ -18,8 +18,8 @@ Eine einfache Web-App zur Verwaltung von Vorräten mit Barcode-Scanner, entwicke
 - ✅ Benutzerdefinierte Kategorien
 - ✅ Deutsche Lokalisierung (Preise in EUR, deutsche Texte)
 - ✅ Multi-User-Support (separate DBs pro User)
-- ✅ Sichere Authentifizierung mit Passwort (SHA-256 Hash)
-- ✅ Cookie-basierte automatische Anmeldung
+- ✅ Passwort-Hashing mit Argon2id
+- ✅ Serverseitige Sitzungen mit begrenzter Laufzeit
 - ✅ Persistente Daten in Containern (Podman/Docker)
 
 ## Multi-User-Support
@@ -27,11 +27,15 @@ Eine einfache Web-App zur Verwaltung von Vorräten mit Barcode-Scanner, entwicke
 Die App unterstützt mehrere unabhängige User mit sicherer Authentifizierung:
 
 - Jeder User hat eine eigene SQLite-Datenbank (z.B. `Anna.db`, `Max.db`).
-- Sichere Anmeldung mit Name und Passwort (SHA-256 gehasht gespeichert).
+- Passwörter werden mit Argon2id gehasht gespeichert.
+- Bestehende SHA-256-Hashes werden nach der nächsten erfolgreichen Anmeldung automatisch auf Argon2id migriert.
 - Neue User werden automatisch bei erster Anmeldung erstellt.
-- Automatische Cookie-basierte Anmeldung (1 Jahr gültig).
+- Sitzungen laufen standardmäßig nach 12 Stunden ab und werden serverseitig gespeichert.
+- Das Session-Cookie ist `HttpOnly`, `Secure` und `SameSite=Lax`; es enthält weder Benutzername noch Passwort.
 - Daten sind vollständig isoliert und persistent.
 - Logout-Button zum User-Wechsel.
+
+Die Sitzungsdauer kann über `SESSION_TTL_SECONDS` angepasst werden. `SESSION_COOKIE_SECURE` ist standardmäßig aktiviert und darf nur für eine lokale HTTP-Entwicklungsumgebung auf `false` gesetzt werden; im Deployment muss HTTPS verwendet werden.
 
 ## Lokale Entwicklung
 
