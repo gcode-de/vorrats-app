@@ -228,6 +228,7 @@ def init_db(user: str):
             barcode   TEXT,
             price     REAL,
             store     TEXT,
+            location  TEXT,
             created_at TEXT NOT NULL
         )
     """)
@@ -489,8 +490,8 @@ def create_item(item: ItemCreate, request: Request):
     init_db(user)
     con = get_db(user)
     cur = con.execute(
-        "INSERT INTO items (name,qty,unit,cat,expiry,barcode,price,store,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
-        (item.name, item.qty, item.unit, item.cat, item.expiry or None, item.barcode or None, item.price, item.store, now())
+        "INSERT INTO items (name,qty,unit,cat,expiry,barcode,price,store,location,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        (item.name, item.qty, item.unit, item.cat, item.expiry or None, item.barcode or None, item.price, item.store, item.location, now())
     )
     con.commit()
     row = con.execute("SELECT * FROM items WHERE id=?", (cur.lastrowid,)).fetchone()
