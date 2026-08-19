@@ -27,6 +27,9 @@ LEGACY_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 SESSION_COOKIE_NAME = "vorrat_session"
 SESSION_TTL_SECONDS = int(os.getenv("SESSION_TTL_SECONDS", "43200"))
 SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "true").lower() not in {"0", "false", "no"}
+MIN_PASSWORD_LENGTH = 8
+MAX_PASSWORD_LENGTH = 1024
+MAX_USERNAME_LENGTH = 64
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -195,7 +198,11 @@ def get_data_dir():
         return "./data"
 
 def get_db_path(user: str):
-    return f"{get_data_dir()}/{user}.db"
+    data_dir = os.path.abspath(get_data_dir())
+    db_path = os.path.abspath(os.path.join(data_dir, f"{user}.db"))
+    if os.path.commonpath((data_dir, db_path)) != data_dir:
+        raise ValueError("Invalid user database path")
+    return db_path
 
 def get_users_db_path():
     return f"{get_data_dir()}/users.db"
@@ -318,6 +325,24 @@ def row_to_dict(row):
 def now():
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
+def validate_login_data(data: LoginData) -> None:
+    username = data.user
+    username_is_valid = (
+        username == username.strip()
+        and 1 <= len(username) <= MAX_USERNAME_LENGTH
+        and all(character.isalnum() or character in {" ", "_", "-"} for character in username)
+    )
+    if not username_is_valid:
+        raise HTTPException(
+            status_code=400,
+            detail="Der Benutzername darf nur Buchstaben, Zahlen, Leerzeichen, _ und - enthalten.",
+        )
+    if not MIN_PASSWORD_LENGTH <= len(data.password) <= MAX_PASSWORD_LENGTH:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Das Passwort muss zwischen {MIN_PASSWORD_LENGTH} und {MAX_PASSWORD_LENGTH} Zeichen lang sein.",
+        )
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -394,6 +419,7 @@ def root(request: Request):
 
 @app.post("/api/login")
 def login(data: LoginData):
+    validate_login_data(data)
     user = data.user
     password = data.password
     if verify_user(user, password):
