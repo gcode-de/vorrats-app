@@ -2,11 +2,16 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Tuple
 import sqlite3, os, httpx, asyncio
 from datetime import date
 import datetime
 import hashlib
+import hmac
+import re
+from argon2 import PasswordHasher
+from argon2.exceptions import InvalidHashError, VerifyMismatchError
+from argon2.low_level import Type
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from contextlib import asynccontextmanager
@@ -15,6 +20,8 @@ DB_PATH = None  # Wird dynamisch gesetzt
 OPENFOODFACTS_URL = "https://world.openfoodfacts.org/api/v0/product/{barcode}.json"
 
 scheduler = AsyncIOScheduler()
+password_hasher = PasswordHasher(type=Type.ID)
+LEGACY_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -45,7 +52,19 @@ def init_users_db():
     con.close()
 
 def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
+    return password_hasher.hash(password)
+
+def verify_password(stored_hash: str, password: str) -> Tuple[bool, bool]:
+    """Return whether the password matches and whether its hash needs upgrading."""
+    if LEGACY_SHA256_PATTERN.fullmatch(stored_hash):
+        legacy_hash = hashlib.sha256(password.encode()).hexdigest()
+        return hmac.compare_digest(stored_hash, legacy_hash), True
+
+    try:
+        matches = password_hasher.verify(stored_hash, password)
+    except (InvalidHashError, VerifyMismatchError):
+        return False, False
+    return matches, password_hasher.check_needs_rehash(stored_hash)
 
 def create_user(username: str, password: str):
     init_users_db()
@@ -61,11 +80,21 @@ def create_user(username: str, password: str):
 def verify_user(username: str, password: str) -> bool:
     init_users_db()
     con = sqlite3.connect(get_users_db_path())
-    row = con.execute("SELECT password_hash FROM users WHERE username = ?", (username,)).fetchone()
-    con.close()
-    if row:
-        return row[0] == hash_password(password)
-    return False
+    try:
+        row = con.execute("SELECT password_hash FROM users WHERE username = ?", (username,)).fetchone()
+        if not row:
+            return False
+
+        matches, needs_rehash = verify_password(row[0], password)
+        if matches and needs_rehash:
+            con.execute(
+                "UPDATE users SET password_hash = ? WHERE username = ?",
+                (hash_password(password), username),
+            )
+            con.commit()
+        return matches
+    finally:
+        con.close()
 
 def user_exists(username: str) -> bool:
     init_users_db()
