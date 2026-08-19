@@ -5,8 +5,6 @@ services:
     build: .
     container_name: vorratsverwaltung
     restart: unless-stopped
-    environment:
-      # DB_PATH wird dynamisch gesetzt pro User
     volumes:
       - vorrat-data:/data
     networks:
