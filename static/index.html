@@ -878,17 +878,6 @@
 
     <script>
       const API = "";
-      // Cookie lesen
-      function getCookie(name) {
-        const value = `; ${document.cookie}`;
-        const parts = value.split(`; ${name}=`);
-        if (parts.length === 2) return parts.pop().split(";").shift();
-        return null;
-      }
-      const user = getCookie("vorrat_user");
-      if (!user) {
-        document.cookie = "vorrat_user=default; path=/; max-age=31536000";
-      }
       let items = [];
       let recentlyTakenItems = [];
       let selectedItems = [];
@@ -906,8 +895,15 @@
       const CATS = { food: "Lebensmittel", house: "Haushalt", hygiene: "Hygiene" };
       const CAT_ICON = { food: "fas fa-utensils", house: "fas fa-home", hygiene: "fas fa-pump-soap" };
 
-      // User im Header anzeigen
-      document.getElementById("user-name").textContent = user ? ` - ${user}` : "";
+      async function fetchSession() {
+        const response = await fetch(`${API}/api/session`);
+        if (response.status === 401) {
+          window.location.href = "/";
+          return;
+        }
+        const session = await response.json();
+        document.getElementById("user-name").textContent = ` - ${session.user}`;
+      }
 
       // ---------------------------------------------------------------------------
       // Spinner
@@ -1821,9 +1817,9 @@
         clearBtn.style.display = searchInput.value.trim() ? "flex" : "none";
       }
 
-      function logout() {
-        document.cookie = "vorrat_user=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-        window.location.reload();
+      async function logout() {
+        await fetch(`${API}/api/logout`, { method: "POST" });
+        window.location.href = "/";
       }
 
       // ---------------------------------------------------------------------------
@@ -1833,6 +1829,7 @@
         await init();
       });
       async function init() {
+        await fetchSession();
         await fetchItems();
         await fetchRecentlyTaken();
         await fetchStores();

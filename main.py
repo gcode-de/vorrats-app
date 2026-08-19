@@ -1,6 +1,6 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Optional, Tuple
 import sqlite3, os, httpx, asyncio
@@ -9,6 +9,8 @@ import datetime
 import hashlib
 import hmac
 import re
+import secrets
+import time
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerifyMismatchError
 from argon2.low_level import Type
@@ -22,6 +24,9 @@ OPENFOODFACTS_URL = "https://world.openfoodfacts.org/api/v0/product/{barcode}.js
 scheduler = AsyncIOScheduler()
 password_hasher = PasswordHasher(type=Type.ID)
 LEGACY_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+SESSION_COOKIE_NAME = "vorrat_session"
+SESSION_TTL_SECONDS = int(os.getenv("SESSION_TTL_SECONDS", "43200"))
+SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "true").lower() not in {"0", "false", "no"}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -48,6 +53,15 @@ def init_users_db():
             password_hash TEXT NOT NULL
         )
     """)
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS sessions (
+            token_hash TEXT PRIMARY KEY,
+            username TEXT NOT NULL,
+            expires_at INTEGER NOT NULL,
+            FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+        )
+    """)
+    con.execute("CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)")
     con.commit()
     con.close()
 
@@ -102,6 +116,72 @@ def user_exists(username: str) -> bool:
     row = con.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone()
     con.close()
     return row is not None
+
+def hash_session_token(token: str) -> str:
+    # Session tokens have high entropy, so a fast hash is appropriate here.
+    return hashlib.sha256(token.encode()).hexdigest()
+
+def create_session(username: str) -> str:
+    init_users_db()
+    token = secrets.token_urlsafe(32)
+    now_timestamp = int(time.time())
+    con = sqlite3.connect(get_users_db_path())
+    try:
+        con.execute("PRAGMA foreign_keys = ON")
+        con.execute("DELETE FROM sessions WHERE expires_at <= ?", (now_timestamp,))
+        con.execute("DELETE FROM sessions WHERE username = ?", (username,))
+        con.execute(
+            "INSERT INTO sessions (token_hash, username, expires_at) VALUES (?, ?, ?)",
+            (hash_session_token(token), username, now_timestamp + SESSION_TTL_SECONDS),
+        )
+        con.commit()
+    finally:
+        con.close()
+    return token
+
+def get_session_user(token: Optional[str]) -> Optional[str]:
+    if not token:
+        return None
+
+    init_users_db()
+    now_timestamp = int(time.time())
+    con = sqlite3.connect(get_users_db_path())
+    try:
+        row = con.execute(
+            "SELECT username, expires_at FROM sessions WHERE token_hash = ?",
+            (hash_session_token(token),),
+        ).fetchone()
+        if not row:
+            return None
+        if row[1] <= now_timestamp:
+            con.execute("DELETE FROM sessions WHERE token_hash = ?", (hash_session_token(token),))
+            con.commit()
+            return None
+        return row[0]
+    finally:
+        con.close()
+
+def delete_session(token: Optional[str]) -> None:
+    if not token:
+        return
+    init_users_db()
+    con = sqlite3.connect(get_users_db_path())
+    try:
+        con.execute("DELETE FROM sessions WHERE token_hash = ?", (hash_session_token(token),))
+        con.commit()
+    finally:
+        con.close()
+
+def set_session_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=token,
+        max_age=SESSION_TTL_SECONDS,
+        httponly=True,
+        secure=SESSION_COOKIE_SECURE,
+        samesite="lax",
+        path="/",
+    )
 
 # ---------------------------------------------------------------------------
 # DB setup
@@ -244,9 +324,9 @@ def now():
 
 @app.get("/")
 def root(request: Request):
-    cookie_user = request.cookies.get("vorrat_user")
-    if cookie_user and user_exists(cookie_user):
-        init_db(cookie_user)
+    user = get_session_user(request.cookies.get(SESSION_COOKIE_NAME))
+    if user:
+        init_db(user)
         return FileResponse("./static/index.html")
     else:
         return HTMLResponse(f"""
@@ -274,19 +354,6 @@ def root(request: Request):
     <button onclick="login()">Anmelden / Registrieren</button>
     <div id="error" class="error" style="display: none;"></div>
     <script>
-        // Cookie lesen
-        function getCookie(name) {{
-            const value = `; ${{document.cookie}}`;
-            const parts = value.split(`; ${{name}}=`);
-            if (parts.length === 2) return parts.pop().split(';').shift();
-            return null;
-        }}
-        // Cookie setzen (1 Jahr Laufzeit)
-        function setCookie(name, value, days) {{
-            const date = new Date();
-            date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
-            document.cookie = `${{name}}=${{value}}; expires=${{date.toUTCString()}}; path=/`;
-        }}
         async function login() {{
             const user = document.getElementById('username').value.trim();
             const pass = document.getElementById('password').value;
@@ -301,7 +368,6 @@ def root(request: Request):
                     body: JSON.stringify({{ user: user, password: pass }})
                 }});
                 if (response.ok) {{
-                    setCookie('vorrat_user', user, 365);
                     window.location.href = '/';
                 }} else {{
                     const data = await response.json();
@@ -331,16 +397,36 @@ def login(data: LoginData):
     user = data.user
     password = data.password
     if verify_user(user, password):
-        return {"success": True}
+        pass
     elif user_exists(user):
         raise HTTPException(status_code=401, detail="Falsches Passwort.")
     else:
         create_user(user, password)
-        return {"success": True}
+
+    response = JSONResponse({"success": True})
+    set_session_cookie(response, create_session(user))
+    return response
+
+@app.post("/api/logout", status_code=204)
+def logout(request: Request):
+    delete_session(request.cookies.get(SESSION_COOKIE_NAME))
+    response = Response(status_code=204)
+    response.delete_cookie(
+        key=SESSION_COOKIE_NAME,
+        path="/",
+        secure=SESSION_COOKIE_SECURE,
+        httponly=True,
+        samesite="lax",
+    )
+    return response
+
+@app.get("/api/session")
+def session_details(request: Request):
+    return {"user": validate_user(request)}
 
 def validate_user(request: Request):
-    user = request.cookies.get("vorrat_user")
-    if not user or not user_exists(user):
+    user = get_session_user(request.cookies.get(SESSION_COOKIE_NAME))
+    if not user:
         raise HTTPException(status_code=401, detail="Unauthorized")
     return user
 
